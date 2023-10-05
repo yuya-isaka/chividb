@@ -8,10 +8,10 @@ import (
 
 const (
 	PageSize  = 4096
-	InvalidID = PageID(^uint64(0))
+	InvalidID = PageID(-1)
 )
 
-type PageID uint64
+type PageID int64
 
 // ======================================================================
 
@@ -37,10 +37,27 @@ func NewFileManager(path string) (*FileManager, error) {
 		return nil, errors.New("invalid heap file size")
 	}
 
+	nextID := PageID(heapSize) / PageSize
+	if nextID <= InvalidID {
+		return nil, errors.New("invalid page id")
+	}
+
 	return &FileManager{
 		heap:   heap,
-		nextID: PageID(heapSize) / PageSize,
+		nextID: nextID,
 	}, nil
+}
+
+func checkPage(pageID PageID, pageData []byte) error {
+	// ページサイズチェック
+	if len(pageData) != PageSize {
+		return errors.New("invalid page size")
+	}
+	// ページIDチェック
+	if pageID <= InvalidID {
+		return errors.New("invalid page id")
+	}
+	return nil
 }
 
 // ファイルシーク
@@ -51,13 +68,14 @@ func (m *FileManager) seek(pageID PageID) error {
 
 // ページデータ読み込み
 func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
-	// ページサイズチェック
-	if len(pageData) != PageSize {
-		return errors.New("invalid page size")
+	// チェック
+	err := checkPage(pageID, pageData)
+	if err != nil {
+		return err
 	}
 
 	// ファイルシーク
-	err := m.seek(pageID)
+	err = m.seek(pageID)
 	if err != nil {
 		return err
 	}
@@ -73,13 +91,14 @@ func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 
 // ページデータ書き込み
 func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
-	// ページサイズチェック
-	if len(pageData) != PageSize {
-		return errors.New("invalid page size")
+	// チェック
+	err := checkPage(pageID, pageData)
+	if err != nil {
+		return err
 	}
 
 	// ファイルシーク
-	err := m.seek(pageID)
+	err = m.seek(pageID)
 	if err != nil {
 		return err
 	}
