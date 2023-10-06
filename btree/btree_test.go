@@ -59,7 +59,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 
 		// ルートノードも最初はリーフタイプ
-		assert.Equal(btree.LeafNode, rootNode.GetNodeType())
+		assert.Equal(btree.LeafNodeType, rootNode.GetNodeType())
 
 		// ======================================================================
 

@@ -8,11 +8,16 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
+// Nodeの種類
+// 葉ノードと枝ノードがある
+// どちらも8 bytes
 const (
-	LeafNode   = "LEAF    "
-	BranchNode = "BRANCH  "
+	LeafNodeType   = "LEAF    "
+	BranchNodeType = "BRANCH  "
 )
 
+// バイトをdisk.PageIDに変換
+// 主にMetaやLeafのIDを取得するときに使う
 func toPageID(b []byte) disk.PageID {
 	return disk.PageID(binary.LittleEndian.Uint64(b))
 }
@@ -56,7 +61,11 @@ func NewNode(page *pool.Page) (*Node, error) {
 }
 
 func (n *Node) SetNodeType(nodeType string) error {
-	if nodeType != LeafNode && nodeType != BranchNode {
+	if nodeType != LeafNodeType && nodeType != BranchNodeType {
+		return fmt.Errorf("invalid node type: %s", nodeType)
+	}
+
+	if len(nodeType) != 8 {
 		return fmt.Errorf("invalid node type: %s", nodeType)
 	}
 
@@ -249,7 +258,7 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 		return nil, err
 	}
 	// ルートノードのノードタイプをセット
-	err = rootNode.SetNodeType(LeafNode)
+	err = rootNode.SetNodeType(LeafNodeType)
 	if err != nil {
 		return nil, err
 	}
