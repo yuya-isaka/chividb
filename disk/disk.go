@@ -48,41 +48,33 @@ func NewFileManager(path string) (*FileManager, error) {
 	}, nil
 }
 
-func checkPage(pageID PageID, pageData []byte) error {
+func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 	// ページサイズチェック
 	if len(pageData) != PageSize {
 		return fmt.Errorf("invalid page size: got %d, want %d", len(pageData), PageSize)
 	}
+
 	// ページIDチェック
 	if pageID <= InvalidID {
 		return fmt.Errorf("invalid page id: got %d", pageID)
 	}
-	return nil
-}
 
-// ファイルシーク
-func (m *FileManager) seek(pageID PageID) error {
-	_, err := m.heap.Seek(int64(pageID*PageSize), io.SeekStart)
-	return err
+	// ファイルシーク
+	if _, err := m.heap.Seek(int64(pageID*PageSize), io.SeekStart); err != nil {
+		return fmt.Errorf("failed to seek page data: %w", err)
+	}
+
+	return nil
 }
 
 // ページデータ読み込み
 func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
-	// チェック
-	err := checkPage(pageID, pageData)
-	if err != nil {
+	if err := m.checkSeek(pageID, pageData); err != nil {
 		return err
 	}
 
-	// ファイルシーク
-	err = m.seek(pageID)
-	if err != nil {
-		return fmt.Errorf("failed to seek page data: %w", err)
-	}
-
 	// ファイル読み込み
-	_, err = m.heap.Read(pageData)
-	if err != nil {
+	if _, err := m.heap.Read(pageData); err != nil {
 		return fmt.Errorf("failed to read page data: %w", err)
 	}
 
@@ -91,21 +83,12 @@ func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 
 // ページデータ書き込み
 func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
-	// チェック
-	err := checkPage(pageID, pageData)
-	if err != nil {
+	if err := m.checkSeek(pageID, pageData); err != nil {
 		return err
 	}
 
-	// ファイルシーク
-	err = m.seek(pageID)
-	if err != nil {
-		return fmt.Errorf("failed to seek page data: %w", err)
-	}
-
-	// ファイル読み込み
-	_, err = m.heap.Write(pageData)
-	if err != nil {
+	// ファイル書き込み
+	if _, err := m.heap.Write(pageData); err != nil {
 		return fmt.Errorf("failed to write page data: %w", err)
 	}
 

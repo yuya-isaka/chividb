@@ -241,8 +241,7 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 	}
 
 	// メタデータにルートIDをセット
-	err = metaData.SetID(rootID)
-	if err != nil {
+	if err := metaData.SetID(rootID); err != nil {
 		return nil, err
 	}
 
@@ -258,8 +257,7 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 		return nil, err
 	}
 	// ルートノードのノードタイプをセット
-	err = rootNode.SetNodeType(LeafNodeType)
-	if err != nil {
+	if err := rootNode.SetNodeType(LeafNodeType); err != nil {
 		return nil, err
 	}
 

@@ -143,8 +143,7 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 
 	// データが更新されていたら、ファイルに書き込む
 	if page.GetUpdate() {
-		err = p.fileManager.WritePageData(page.GetID(), page.GetData())
-		if err != nil {
+		if err := p.fileManager.WritePageData(page.GetID(), page.GetData()); err != nil {
 			return nil, InvalidIndex, err
 		}
 	}
@@ -208,16 +207,14 @@ func (p *PoolManager) Flush() error {
 	// テーブルにあるデータを全てファイルに書き込む
 	for pageId, poolIndex := range p.pageTable {
 		page := p.pool.getPage(poolIndex)
-		err := p.fileManager.WritePageData(pageId, page.GetData())
-		if err != nil {
+		if err := p.fileManager.WritePageData(pageId, page.GetData()); err != nil {
 			return err
 		}
 		page.SetUpdate(false)
 	}
 
 	// ファイル同期
-	err := p.fileManager.Sync()
-	if err != nil {
+	if err := p.fileManager.Sync(); err != nil {
 		return err
 	}
 
@@ -226,14 +223,12 @@ func (p *PoolManager) Flush() error {
 
 func (p *PoolManager) Close() error {
 	// Flush
-	err := p.Flush()
-	if err != nil {
+	if err := p.Flush(); err != nil {
 		return err
 	}
 
 	// ファイルクローズ
-	err = p.fileManager.Close()
-	if err != nil {
+	if err := p.fileManager.Close(); err != nil {
 		return err
 	}
 
