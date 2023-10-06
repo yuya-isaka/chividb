@@ -25,7 +25,8 @@ type FileManager struct {
 // 新しいFileManagerの生成と初期化を行う関数
 //
 //	path: 使用するファイルのパス
-//	返り値: 初期化されたFileManagerオブジェクトと、初期化時に発生した可能性のあるエラー
+//	返り値1: 初期化されたFileManagerオブジェクト
+//	返り値2: 初期化時に発生した可能性のあるエラー
 func NewFileManager(path string) (*FileManager, error) {
 
 	// ファイルオブジェクトの生成とエラーチェック
@@ -63,7 +64,7 @@ func NewFileManager(path string) (*FileManager, error) {
 //
 //	pageID: チェックまたは移動したいページのID
 //	pageData: 読み書きするデータのバイトスライス
-//	返り値: ファイルポインタの移動やパラメータチェック中に発生した可能性のあるエラー
+//	返り値1: ファイルポインタの移動やパラメータチェック中に発生した可能性のあるエラー
 func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 
 	// ページデータサイズのバリデーション
@@ -88,7 +89,7 @@ func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 //
 //	pageID: データを読み込むページのID
 //	pageData: 読み込んだデータを格納するバイトスライス
-//	返り値: データ読み込み中に発生した可能性のあるエラー
+//	返り値1: データ読み込み中に発生した可能性のあるエラー
 func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 
 	// ファイルポインタの移動とパラメータチェック
@@ -108,7 +109,7 @@ func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 //
 //	pageID: データを書き込むページのID
 //	pageData: 書き込むデータを含むバイトスライス
-//	返り値: データ書き込み中に発生した可能性のあるエラー
+//	返り値1: データ書き込み中に発生した可能性のあるエラー
 func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
 
 	// ファイルポインタの移動とパラメータチェック
@@ -126,7 +127,8 @@ func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
 
 // 新しいページを割り当てる関数
 //
-//	返り値: 割り当てられた新しいページIDと、ページ割り当て中に発生した可能性のあるエラー
+//	返り値1: 割り当てられた新しいページID
+//	返り値2: ページ割り当て中に発生した可能性のあるエラー
 func (m *FileManager) AllocateNewPage() (PageID, error) {
 	// 新しいページIDを割り当てて次のIDを更新
 	pageID := m.nextID
@@ -136,14 +138,14 @@ func (m *FileManager) AllocateNewPage() (PageID, error) {
 
 // ファイルの変更をディスクに強制的に書き込む関数
 //
-//	返り値: ファイル同期中に発生した可能性のあるエラー
+//	返り値1: ファイル同期中に発生した可能性のあるエラー
 func (m *FileManager) Sync() error {
 	return m.heap.Sync()
 }
 
 // ファイルを閉じる関数
 //
-//	返り値: ファイルクローズ中に発生した可能性のあるエラー
+//	返り値1: ファイルクローズ中に発生した可能性のあるエラー
 func (m *FileManager) Close() error {
 	return m.heap.Close()
 }
