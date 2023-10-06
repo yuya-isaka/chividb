@@ -23,7 +23,7 @@ func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error
 	}
 	fetchPage.SetData(bytes)
 	fetchPage.SetUpdate(true)
-	defer fetchPage.SubPin()
+	defer fetchPage.Unpin()
 
 	return pageID, nil
 }
@@ -155,7 +155,7 @@ func TestPool(t *testing.T) {
 
 		// 参照カウンタを減らすことで、新しいページが作れるようになる
 		// helloPageとfetchPageは同じページを参照しており、そのページのカウントを２回下げることで-1になる
-		fetchPage.SubPin()
+		fetchPage.Unpin()
 		assert.Equal(pool.Pin(-1), fetchPage.GetPinCount())
 
 		// ------------------------------------------------------------------
@@ -178,7 +178,7 @@ func TestPool(t *testing.T) {
 		_, err = poolManager.CreatePage()
 		assert.Error(err)
 
-		fetchPage.SubPin()
+		fetchPage.Unpin()
 		assert.Equal(pool.NoReferencePin, fetchPage.GetPinCount())
 
 		// ------------------------------------------------------------------

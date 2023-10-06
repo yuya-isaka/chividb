@@ -1,7 +1,7 @@
 package disk
 
 import (
-	"errors"
+	"fmt"
 	"io"
 	"os"
 )
@@ -34,12 +34,12 @@ func NewFileManager(path string) (*FileManager, error) {
 	}
 	heapSize := info.Size()
 	if heapSize%PageSize != 0 {
-		return nil, errors.New("invalid heap file size")
+		return nil, fmt.Errorf("invalid heap file size: got %d", heapSize)
 	}
 
 	nextID := PageID(heapSize) / PageSize
 	if nextID <= InvalidID {
-		return nil, errors.New("invalid page id")
+		return nil, fmt.Errorf("invalid page id: got %d", nextID)
 	}
 
 	return &FileManager{
@@ -51,11 +51,11 @@ func NewFileManager(path string) (*FileManager, error) {
 func checkPage(pageID PageID, pageData []byte) error {
 	// ページサイズチェック
 	if len(pageData) != PageSize {
-		return errors.New("invalid page size")
+		return fmt.Errorf("invalid page size: got %d, want %d", len(pageData), PageSize)
 	}
 	// ページIDチェック
 	if pageID <= InvalidID {
-		return errors.New("invalid page id")
+		return fmt.Errorf("invalid page id: got %d", pageID)
 	}
 	return nil
 }
@@ -77,13 +77,13 @@ func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 	// ファイルシーク
 	err = m.seek(pageID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to seek page data: %w", err)
 	}
 
 	// ファイル読み込み
 	_, err = m.heap.Read(pageData)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read page data: %w", err)
 	}
 
 	return nil
@@ -100,13 +100,13 @@ func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
 	// ファイルシーク
 	err = m.seek(pageID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to seek page data: %w", err)
 	}
 
 	// ファイル読み込み
 	_, err = m.heap.Write(pageData)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to write page data: %w", err)
 	}
 
 	return nil

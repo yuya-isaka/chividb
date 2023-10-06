@@ -2,6 +2,7 @@ package pool
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/yuya-isaka/chibidb/disk"
 )
@@ -19,6 +20,7 @@ type Page struct {
 	data   []byte
 	pin    Pin
 	update bool
+	// mu     sync.RWMutex
 }
 
 func (p *Page) reset() {
@@ -53,7 +55,7 @@ func (p *Page) addPin() {
 	p.pin++
 }
 
-func (p *Page) SubPin() {
+func (p *Page) Unpin() {
 	p.pin--
 }
 
@@ -103,7 +105,7 @@ func (p *Pool) clockSweep() (PoolIndex, error) {
 		} else {
 			checkedPageNum++
 			if checkedPageNum >= pageNum {
-				// ここでエラーを返さずに何かを通知する処理を追加したら、良いのかな？ (プールのサイズとスレッドの数を一致させたら色々と都合が良い？)
+				// ここでエラーを返さずに何かを通知する処理を追加したら、goroutineで処理しやすい？並行処理しやすい？良いのかな？ (プールのサイズとスレッドの数を一致させたら色々と都合が良い？)
 				return 0, errors.New("all pages are pinned")
 			}
 		}
@@ -154,7 +156,7 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 // コピーを返す方がバグが減りそうだけど、そうなると変更できない？直接プールマネージャを通して変更する方法しかない？
 func (p *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 	if pageID <= disk.InvalidID {
-		return nil, errors.New("invalid page id")
+		return nil, fmt.Errorf("invalid page id: got %d", pageID)
 	}
 
 	// テーブルにある場合 return
@@ -193,6 +195,7 @@ func (p *PoolManager) CreatePage() (disk.PageID, error) {
 	if err != nil {
 		return disk.InvalidID, err
 	}
+	// 初期化
 	page.reset()
 	page.SetID(newPageID)
 	page.SetUpdate(true)
