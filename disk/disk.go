@@ -57,7 +57,7 @@ func NewFileManager(path string) (*FileManager, error) {
 }
 
 // パラメータチェックとファイルポインタの移動を行う補助関数
-func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
+func (f *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 
 	// ページデータサイズのバリデーション
 	if len(pageData) != PageSize {
@@ -65,12 +65,12 @@ func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 	}
 
 	// ページIDのバリデーション
-	if pageID <= InvalidPageID {
+	if pageID <= InvalidPageID || pageID >= f.GetNextPageID() {
 		return fmt.Errorf("invalid page id: got %d", pageID)
 	}
 
 	// ファイルポインタの移動
-	if _, err := m.heap.Seek(int64(pageID*PageSize), io.SeekStart); err != nil {
+	if _, err := f.heap.Seek(int64(pageID*PageSize), io.SeekStart); err != nil {
 		return fmt.Errorf("failed to seek page data: %w", err)
 	}
 
@@ -78,15 +78,15 @@ func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 }
 
 // 指定ページIDのデータ読み込みを行う関数
-func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
+func (f *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 
 	// パラメータチェックとファイルポインタの移動
-	if err := m.checkSeek(pageID, pageData); err != nil {
+	if err := f.checkSeek(pageID, pageData); err != nil {
 		return err
 	}
 
 	// ファイルからデータの読み込み
-	if _, err := m.heap.Read(pageData); err != nil {
+	if _, err := f.heap.Read(pageData); err != nil {
 		return fmt.Errorf("failed to read page data: %w", err)
 	}
 
@@ -94,15 +94,15 @@ func (m *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 }
 
 // 指定ページIDへデータを書き込む関数
-func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
+func (f *FileManager) WritePageData(pageID PageID, pageData []byte) error {
 
 	// パラメータチェックとファイルポインタの移動
-	if err := m.checkSeek(pageID, pageData); err != nil {
+	if err := f.checkSeek(pageID, pageData); err != nil {
 		return err
 	}
 
 	// データのファイルへの書き込み
-	if _, err := m.heap.Write(pageData); err != nil {
+	if _, err := f.heap.Write(pageData); err != nil {
 		return fmt.Errorf("failed to write page data: %w", err)
 	}
 
@@ -110,19 +110,23 @@ func (m *FileManager) WritePageData(pageID PageID, pageData []byte) error {
 }
 
 // 新しいページを割り当てる関数
-func (m *FileManager) AllocNewPage() (PageID, error) {
+func (f *FileManager) AllocNewPage() (PageID, error) {
 	// 新しいページIDを割り当てて次のIDを更新
-	pageID := m.nextID
-	m.nextID++
+	pageID := f.nextID
+	f.nextID++
 	return pageID, nil
 }
 
+func (f *FileManager) GetNextPageID() PageID {
+	return f.nextID
+}
+
 // ファイルの変更をディスクに強制的に書き込む関数
-func (m *FileManager) Sync() error {
-	return m.heap.Sync()
+func (f *FileManager) Sync() error {
+	return f.heap.Sync()
 }
 
 // ファイルを閉じる関数
-func (m *FileManager) Close() error {
-	return m.heap.Close()
+func (f *FileManager) Close() error {
+	return f.heap.Close()
 }

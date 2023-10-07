@@ -11,6 +11,7 @@ import (
 )
 
 func TestBTree_InsertAndSearch(t *testing.T) {
+
 	// 準備
 	assert := assert.New(t)
 
@@ -28,6 +29,8 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// プールマネージャ準備
 		poolManager := pool.NewPoolManager(fileManager, testPool)
 		defer poolManager.Close()
+
+		// ======================================================================
 
 		// BTree準備
 		tree, err := btree.NewBTree(poolManager)

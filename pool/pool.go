@@ -106,19 +106,19 @@ func NewPool(size int) *Pool {
 }
 
 // 指定インデックスのページの取得
-func (p *Pool) getPage(index PoolIndex) *Page {
-	return &p.pages[index]
+func (po *Pool) getPage(index PoolIndex) *Page {
+	return &po.pages[index]
 }
 
 // クロックスイープアルゴリズム: プールからページを削除するインデックスの探索
-func (p *Pool) clockSweep() (PoolIndex, error) {
-	pageNum := len(p.pages) // プール内のページ数
-	checkedPageNum := 0     // チェックしたページ数
+func (po *Pool) clockSweep() (PoolIndex, error) {
+	pageNum := len(po.pages) // プール内のページ数
+	checkedPageNum := 0      // チェックしたページ数
 
 	// プールのページを探し、ピンされていないページを見つけるか、全ページをチェックするまでループ
 	for {
-		nextKickIndex := p.nextKickIndex
-		page := p.getPage(nextKickIndex)
+		nextKickIndex := po.nextKickIndex
+		page := po.getPage(nextKickIndex)
 
 		if page.GetPinCount() == NoReferencePin {
 			// ピンされていないページを見つけたら、そのインデックスを返す
@@ -132,7 +132,7 @@ func (p *Pool) clockSweep() (PoolIndex, error) {
 		}
 
 		// 次のチェックするインデックスの準備
-		p.nextKickIndex = (p.nextKickIndex + 1) % PoolIndex(pageNum)
+		po.nextKickIndex = (po.nextKickIndex + 1) % PoolIndex(pageNum)
 	}
 }
 
@@ -155,21 +155,21 @@ func NewPoolManager(fileManager *disk.FileManager, pool *Pool) *PoolManager {
 }
 
 // プールからページを削除し、その場所を新しいページで利用可能にする
-func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
+func (pm *PoolManager) kickPage() (*Page, PoolIndex, error) {
 
 	// プールから使用可能なページインデックスを探索
-	poolIndex, err := p.pool.clockSweep()
+	poolIndex, err := pm.pool.clockSweep()
 	if err != nil {
 		return nil, InvalidPoolIndex, err
 	}
 
 	// ページがページテーブルに登録されていれば、登録を削除
-	page := p.pool.getPage(poolIndex)
-	delete(p.pageTable, page.GetID())
+	page := pm.pool.getPage(poolIndex)
+	delete(pm.pageTable, page.GetID())
 
 	// ページが更新されていれば、その内容をファイルに書き込み
 	if page.GetUpdate() {
-		if err := p.fileManager.WritePageData(page.GetID(), page.GetData()); err != nil {
+		if err := pm.fileManager.WritePageData(page.GetID(), page.GetData()); err != nil {
 			return nil, InvalidPoolIndex, err
 		}
 	}
@@ -179,45 +179,45 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 }
 
 // 指定したページIDのページを取得
-func (p *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
+func (pm *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 
 	// 無効なページIDはエラー
-	if pageID <= disk.InvalidPageID {
+	if pageID <= disk.InvalidPageID || pageID >= pm.fileManager.GetNextPageID() {
 		return nil, fmt.Errorf("invalid page id: got %d", pageID)
 	}
 
 	// ページテーブルにページIDのページが存在するか確認
-	if poolIndex, ok := p.pageTable[pageID]; ok {
-		page := p.pool.getPage(poolIndex)
+	if poolIndex, ok := pm.pageTable[pageID]; ok {
+		page := pm.pool.getPage(poolIndex)
 		page.addPin()    // ページ利用のためピンカウントを増加
 		return page, nil // 存在すれば、そのページを返却
 	}
 
 	// ページテーブルに存在しなければ、プールからページを取得しファイルから内容を読み込み
-	page, poolIndex, err := p.kickPage()
+	page, poolIndex, err := pm.kickPage()
 	if err != nil {
 		return nil, err
 	}
 	page.SetID(pageID)
 	page.SetUpdate(false)
-	p.fileManager.ReadPageData(pageID, page.GetData()) // ファイルからページデータを読み込み
-	page.addPin()                                      // ページ利用のためピンカウントを増加
-	p.pageTable[pageID] = poolIndex
+	pm.fileManager.ReadPageData(pageID, page.GetData()) // ファイルからページデータを読み込み
+	page.addPin()                                       // ページ利用のためピンカウントを増加
+	pm.pageTable[pageID] = poolIndex
 
 	return page, nil
 }
 
 // 新しいページを作成
-func (p *PoolManager) CreatePage() (disk.PageID, error) {
+func (pm *PoolManager) CreatePage() (disk.PageID, error) {
 
 	// プールから使用可能なページを取得
-	page, poolIndex, err := p.kickPage()
+	page, poolIndex, err := pm.kickPage()
 	if err != nil {
 		return disk.InvalidPageID, err
 	}
 
 	// ファイルから新しいページIDを取得
-	newPageID, err := p.fileManager.AllocNewPage()
+	newPageID, err := pm.fileManager.AllocNewPage()
 	if err != nil {
 		return disk.InvalidPageID, err
 	}
@@ -226,32 +226,32 @@ func (p *PoolManager) CreatePage() (disk.PageID, error) {
 	page.reset()
 	page.SetID(newPageID)
 	page.SetUpdate(true)
-	p.pageTable[newPageID] = poolIndex
+	pm.pageTable[newPageID] = poolIndex
 
 	return newPageID, nil
 }
 
 // ページテーブル内の変更されたすべてのページをファイルに書き込み
-func (p *PoolManager) Sync() error {
-	for pageId, poolIndex := range p.pageTable {
-		page := p.pool.getPage(poolIndex)
-		if err := p.fileManager.WritePageData(pageId, page.GetData()); err != nil {
+func (pm *PoolManager) Sync() error {
+	for pageId, poolIndex := range pm.pageTable {
+		page := pm.pool.getPage(poolIndex)
+		if err := pm.fileManager.WritePageData(pageId, page.GetData()); err != nil {
 			return err
 		}
 		page.SetUpdate(false)
 	}
 
 	// ファイル内容をディスクと同期
-	return p.fileManager.Sync()
+	return pm.fileManager.Sync()
 }
 
 // プールマネージャを閉じ、関連リソースを解放
-func (p *PoolManager) Close() error {
+func (pm *PoolManager) Close() error {
 	// 変更されたページをファイルと同期
-	if err := p.Sync(); err != nil {
+	if err := pm.Sync(); err != nil {
 		return err
 	}
 
 	// ファイルマネージャを閉じる
-	return p.fileManager.Close()
+	return pm.fileManager.Close()
 }

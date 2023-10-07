@@ -12,13 +12,6 @@ func TestReadWrite(t *testing.T) {
 	// 準備
 	assert := assert.New(t)
 
-	// テストファイル準備
-	testFile := "testfile"
-	fileManager, err := disk.NewFileManager(testFile)
-	assert.NoError(err)
-	defer fileManager.Close()
-	defer os.Remove(testFile)
-
 	// テストデータ準備
 	helloByte := make([]byte, disk.PageSize)
 	copy(helloByte, "Hello")
@@ -26,6 +19,16 @@ func TestReadWrite(t *testing.T) {
 	copy(worldByte, "World")
 
 	t.Run("Read and Write Single Page", func(t *testing.T) {
+
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer fileManager.Close()
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
 		// 書き込み
 		testPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
@@ -41,7 +44,17 @@ func TestReadWrite(t *testing.T) {
 		assert.Equal(helloByte, readBuffer)
 	})
 
-	t.Run("Read and Write Multi Page", func(t *testing.T) {
+	t.Run("Write Write Read Read", func(t *testing.T) {
+
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer fileManager.Close()
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
 		// 書き込み
 		helloPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
@@ -69,7 +82,17 @@ func TestReadWrite(t *testing.T) {
 		assert.Equal(worldByte, worldBuffer)
 	})
 
-	t.Run("Read and Write Multi Page", func(t *testing.T) {
+	t.Run("Write Read Write Read", func(t *testing.T) {
+
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer fileManager.Close()
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
 		// 書き込み
 		helloPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
@@ -84,6 +107,8 @@ func TestReadWrite(t *testing.T) {
 		// テスト
 		assert.Equal(helloByte, helloBuffer)
 
+		// ======================================================================
+
 		// 書き込み
 		worldPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
@@ -97,5 +122,55 @@ func TestReadWrite(t *testing.T) {
 
 		// テスト
 		assert.Equal(worldByte, worldBuffer)
+	})
+
+	t.Run("Error Handling: Read Non-Existent Page", func(t *testing.T) {
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer fileManager.Close()
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
+		// 読み込み: 存在しないページIDを指定
+		nonExistentPageID := disk.InvalidPageID
+		errBuffer := make([]byte, disk.PageSize)
+		err = fileManager.ReadPageData(nonExistentPageID, errBuffer)
+
+		// テスト: エラーが返されるか
+		assert.Error(err)
+		assert.Equal("invalid page id: got -1", err.Error())
+
+		// ======================================================================
+
+		// 読み込み: 存在しないページIDを指定
+		nonExistentPageID = disk.PageID(0)
+		errBuffer = make([]byte, disk.PageSize)
+		err = fileManager.ReadPageData(nonExistentPageID, errBuffer)
+
+		// テスト: エラーが出て空のページが返されるか
+		assert.Error(err)
+		assert.Equal("invalid page id: got 0", err.Error())
+	})
+
+	t.Run("Error Handling: Write Non-Existent Page", func(t *testing.T) {
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer fileManager.Close()
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
+		// 書き込み: 存在しないページIDを指定
+		nonExistentPageID := disk.InvalidPageID
+		err = fileManager.WritePageData(nonExistentPageID, helloByte)
+
+		// テスト: エラーが返されるか
+		assert.Error(err)
+		assert.Equal("invalid page id: got -1", err.Error())
 	})
 }

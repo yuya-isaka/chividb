@@ -28,6 +28,8 @@ func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error
 	return pageID, nil
 }
 
+// ======================================================================
+
 func TestPool(t *testing.T) {
 	// 準備
 	assert := assert.New(t)
@@ -38,7 +40,7 @@ func TestPool(t *testing.T) {
 	worldBytes := make([]byte, disk.PageSize)
 	copy(worldBytes, "World")
 
-	// ------------------------------------------------------------------
+	// ======================================================================
 
 	t.Run("Simple Pool 3", func(t *testing.T) {
 		// テストファイル準備
@@ -52,7 +54,7 @@ func TestPool(t *testing.T) {
 		poolManager := pool.NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (hello)
 		helloID, err := createPage(poolManager, helloBytes)
@@ -79,7 +81,7 @@ func TestPool(t *testing.T) {
 		poolManager := pool.NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (hello)
 		helloID, err := createPage(poolManager, helloBytes)
@@ -93,13 +95,13 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(0), helloID)
 		assert.Equal(helloBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (world)
 		worldID, err := createPage(poolManager, worldBytes)
 		assert.NoError(err)
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// fetch (hello)
 		fetchPage, err = poolManager.FetchPage(helloID)
@@ -109,7 +111,7 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(0), helloID)
 		assert.Equal(helloBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// fetch (world)
 		fetchPage, err = poolManager.FetchPage(worldID)
@@ -132,7 +134,7 @@ func TestPool(t *testing.T) {
 		poolManager := pool.NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (hello)
 		helloID, err := createPage(poolManager, helloBytes)
@@ -146,19 +148,20 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(0), helloID)
 		assert.Equal(helloBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// Error test
 		// プールのサイズは１で、fetchPageがまだ持っているので、エラーになる
 		_, err = poolManager.CreatePage()
 		assert.Error(err)
+		assert.Equal("all pages are pinned", err.Error())
 
 		// 参照カウンタを減らすことで、新しいページが作れるようになる
 		// helloPageとfetchPageは同じページを参照しており、そのページのカウントを２回下げることで-1になる
 		fetchPage.Unpin()
 		assert.Equal(pool.Pin(-1), fetchPage.GetPinCount())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (world)
 		worldID, err := createPage(poolManager, worldBytes)
@@ -172,16 +175,17 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(1), worldID)
 		assert.Equal(worldBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// Error test
 		_, err = poolManager.CreatePage()
 		assert.Error(err)
+		assert.Equal("all pages are pinned", err.Error())
 
 		fetchPage.Unpin()
 		assert.Equal(pool.NoReferencePin, fetchPage.GetPinCount())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// helloIDはコピーされているので０のままのはず
 		assert.Equal(disk.PageID(0), helloID)
@@ -206,7 +210,7 @@ func TestPool(t *testing.T) {
 		poolManager := pool.NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (hello)
 		helloID, err := createPage(poolManager, helloBytes)
@@ -220,7 +224,7 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(0), helloID)
 		assert.Equal(helloBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// create (world)
 		worldID, err := createPage(poolManager, worldBytes)
@@ -234,7 +238,7 @@ func TestPool(t *testing.T) {
 		assert.Equal(disk.PageID(1), worldID)
 		assert.Equal(worldBytes, fetchPage.GetData())
 
-		// ------------------------------------------------------------------
+		// ======================================================================
 
 		// fetch (hello)
 		fetchPage, err = poolManager.FetchPage(helloID)
@@ -243,4 +247,36 @@ func TestPool(t *testing.T) {
 		// テスト (hello)
 		assert.Equal(helloBytes, fetchPage.GetData())
 	})
+
+	t.Run("Fetch Nonexistent Page", func(t *testing.T) {
+		// テストファイル準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer os.Remove(testFile)
+
+		// プール準備
+		poolTest := pool.NewPool(2)
+		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		defer poolManager.Close()
+
+		// ======================================================================
+
+		// 未定義ページIDに対してFetchを行います。
+		nonexistentPageID := disk.PageID(999)
+		_, err = poolManager.FetchPage(nonexistentPageID)
+
+		assert.Error(err)
+		assert.Equal("invalid page id: got 999", err.Error())
+
+		// ======================================================================
+
+		// 未定義ページIDに対してFetchを行います。
+		nonexistentPageID = disk.InvalidPageID
+		_, err = poolManager.FetchPage(nonexistentPageID)
+
+		assert.Error(err)
+		assert.Equal("invalid page id: got -1", err.Error())
+	})
+
 }
