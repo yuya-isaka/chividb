@@ -68,8 +68,8 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 
 		// テスト
-		assert.Equal(disk.InvalidID, leaf.GetPrevID())
-		assert.Equal(disk.InvalidID, leaf.GetNextID())
+		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
+		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
 		assert.Equal(uint16(0), leaf.GetNumSlots())
 		assert.Equal(uint16(4068), leaf.GetFreeSpace())
 

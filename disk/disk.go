@@ -7,22 +7,22 @@ import (
 )
 
 const (
-	PageSize  = 4096       // 1ページサイズ, バイト単位
-	InvalidID = PageID(-1) // 無効なページID
+	PageSize      = 4096       // 1ページサイズ、バイト単位
+	InvalidPageID = PageID(-1) // 無効なページID
 )
 
 // ページIDを示す型
 type PageID int64
 
-// =====================================================================================
+// ======================================================================
 
-// ファイルの管理を抽象化した構造体
+// ファイルマネージャ構造体
 type FileManager struct {
-	heap   *os.File // ファイル操作用のオブジェクト
+	heap   *os.File // ヒープファイルへのファイルポインタ
 	nextID PageID   // 次に割り当てるページID
 }
 
-// 新しいFileManagerの生成と初期化を行う関数
+// ファイルマネージャの生成
 func NewFileManager(path string) (*FileManager, error) {
 
 	// ファイルオブジェクトの生成
@@ -45,7 +45,7 @@ func NewFileManager(path string) (*FileManager, error) {
 
 	// 次に割り当てるページIDの計算とバリデーション
 	nextID := PageID(heapSize) / PageSize
-	if nextID <= InvalidID {
+	if nextID <= InvalidPageID {
 		return nil, fmt.Errorf("invalid page id: got %d", nextID)
 	}
 
@@ -65,7 +65,7 @@ func (m *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 	}
 
 	// ページIDのバリデーション
-	if pageID <= InvalidID {
+	if pageID <= InvalidPageID {
 		return fmt.Errorf("invalid page id: got %d", pageID)
 	}
 

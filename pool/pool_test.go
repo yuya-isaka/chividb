@@ -13,13 +13,13 @@ func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error
 	// ページ作成
 	pageID, err := poolManager.CreatePage()
 	if err != nil {
-		return disk.InvalidID, err
+		return disk.InvalidPageID, err
 	}
 
 	// ページデータ書き込み
 	fetchPage, err := poolManager.FetchPage(pageID)
 	if err != nil {
-		return disk.InvalidID, err
+		return disk.InvalidPageID, err
 	}
 	fetchPage.SetData(bytes)
 	fetchPage.SetUpdate(true)
