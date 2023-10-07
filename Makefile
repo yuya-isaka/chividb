@@ -23,9 +23,12 @@ TEST_FLAGS := -v -race -coverprofile=cover.out -covermode=atomic
 # カバレッジレポート用のフラグを設定
 COVER_FLAGS := -html=cover.out -o cover.html
 
+# 静的解析のフラグを設定
+VET_FLAGS := -all -vettool=$(shell command -v shadow)
+
 # 静的解析とテストを実行
 test:
-	$(GO_CMD) vet ./...
+	$(GO_CMD) vet $(VET_FLAGS) ./...
 	$(GO_TEST) $(TEST_FLAGS) ./...
 
 # カバレッジレポートを生成してブラウザで開く
