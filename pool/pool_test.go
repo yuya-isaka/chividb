@@ -9,6 +9,7 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
+// ページ作って、bytesで初期化したデータを用意する。Unpinして返す。
 func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error) {
 	// ページ作成
 	pageID, err := poolManager.CreatePage()
