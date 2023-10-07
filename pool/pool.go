@@ -18,7 +18,7 @@ type PoolIndex uint64
 // ページのピンカウントを示す型
 type Pin int64
 
-// データベースの1ページを表す
+// ストレージ（ファイル）の1ページを表す
 type Page struct {
 	id     disk.PageID // ページの一意なID
 	data   []byte      // ページのデータ内容
@@ -35,36 +35,26 @@ func (p *Page) reset() {
 }
 
 // ページIDの取得
-//
-//	返り値1: ページID
 func (p *Page) GetID() disk.PageID {
 	return p.id
 }
 
 // ページIDの設定
-//
-//	newID: 新しいページID
 func (p *Page) SetID(newID disk.PageID) {
 	p.id = newID
 }
 
 // ページデータの取得
-//
-//	返り値1: ページデータのバイト配列
 func (p *Page) GetData() []byte {
 	return p.data
 }
 
 // ページデータの設定
-//
-//	data: 新しいページデータ
 func (p *Page) SetData(data []byte) {
 	p.data = data
 }
 
 // ピンカウントの取得
-//
-//	返り値1: ピンカウント
 func (p *Page) GetPinCount() Pin {
 	return p.pin
 }
@@ -80,29 +70,22 @@ func (p *Page) Unpin() {
 }
 
 // 更新フラグの取得
-//
-//	返り値1: 更新フラグ
 func (p *Page) GetUpdate() bool {
 	return p.update
 }
 
 // 更新フラグの設定
-//
-//	update: 新しい更新フラグ
 func (p *Page) SetUpdate(update bool) {
 	p.update = update
 }
 
-// 複数のPageを管理するメモリプールを表す
+// 複数のPageを管理するメモリプール
 type Pool struct {
 	pages         []Page    // プール内の全ページ
 	nextKickIndex PoolIndex // 次にプールから削除するページのインデックス
 }
 
 // 指定されたサイズの新しいページプールの作成
-//
-//	size: プールのサイズ
-//	返り値1: 新しいページプールへのポインタ
 func NewPool(size int) *Pool {
 
 	// 一定数のページを持つプールを作成し、各ページを初期化
@@ -119,20 +102,14 @@ func NewPool(size int) *Pool {
 }
 
 // 指定インデックスのページの取得
-//
-//	index: 取得したいページのインデックス
-//	返り値1: 指定インデックスのページへのポインタ
 func (p *Pool) getPage(index PoolIndex) *Page {
 	return &p.pages[index]
 }
 
 // プールからページを削除するインデックスの探索 (クロックスイープアルゴリズム)
-//
-//	返り値1: 削除対象のページインデックス
-//	返り値2: エラー情報
 func (p *Pool) clockSweep() (PoolIndex, error) {
-	pageNum := len(p.pages)
-	checkedPageNum := 0
+	pageNum := len(p.pages) // プール内のページ数
+	checkedPageNum := 0     // チェックしたページ数
 
 	// プールのページを探し、ピンされていないページを見つけるか、全ページをチェックするまでループ
 	for {
@@ -150,7 +127,7 @@ func (p *Pool) clockSweep() (PoolIndex, error) {
 			}
 		}
 
-		// 次のページをチェックする準備
+		// 次のチェックするインデックスの準備
 		p.nextKickIndex = (p.nextKickIndex + 1) % PoolIndex(pageNum)
 	}
 }
@@ -165,10 +142,6 @@ type PoolManager struct {
 }
 
 // 新しいPoolManagerを作成
-//
-//	fileManager: データをファイルとして保存・読み込みを行うマネージャ
-//	pool: ページプール
-//	返り値1: 作成されたPoolManagerのポインタ
 func NewPoolManager(fileManager *disk.FileManager, pool *Pool) *PoolManager {
 	return &PoolManager{
 		fileManager: fileManager,
@@ -178,11 +151,8 @@ func NewPoolManager(fileManager *disk.FileManager, pool *Pool) *PoolManager {
 }
 
 // プールからページを削除し、その場所を新しいページで利用可能にする
-//
-//	返り値1: 使用可能なページ
-//	返り値2: 使用可能なページのプール内でのインデックス
-//	返り値3: エラー情報
 func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
+
 	// プールから使用可能なページインデックスを探索
 	poolIndex, err := p.pool.clockSweep()
 	if err != nil {
@@ -205,11 +175,8 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 }
 
 // 指定したページIDのページを取得
-//
-//	pageID: 取得したいページのID
-//	返り値1: 取得したページ
-//	返り値2: エラー情報
 func (p *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
+
 	// 無効なページIDが指定された場合、エラーを返却
 	if pageID <= disk.InvalidID {
 		return nil, fmt.Errorf("invalid page id: got %d", pageID)
@@ -218,8 +185,8 @@ func (p *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 	// ページテーブルにページIDのページが存在するか確認
 	if poolIndex, ok := p.pageTable[pageID]; ok {
 		page := p.pool.getPage(poolIndex)
-		page.addPin() // ページ利用のためピンカウントを増加
-		return page, nil
+		page.addPin()    // ページ利用のためピンカウントを増加
+		return page, nil // 存在すれば、そのページを返却
 	}
 
 	// ページテーブルに存在しなければ、プールからページを取得しファイルから内容を読み込み
@@ -229,18 +196,16 @@ func (p *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 	}
 	page.SetID(pageID)
 	page.SetUpdate(false)
-	p.fileManager.ReadPageData(pageID, page.GetData())
-	page.addPin() // ページ利用のためピンカウントを増加
+	p.fileManager.ReadPageData(pageID, page.GetData()) // ファイルからページデータを読み込み
+	page.addPin()                                      // ページ利用のためピンカウントを増加
 	p.pageTable[pageID] = poolIndex
 
 	return page, nil
 }
 
 // 新しいページを作成
-//
-//	返り値1: 新しく割り当てられたページID
-//	返り値2: エラー情報
 func (p *PoolManager) CreatePage() (disk.PageID, error) {
+
 	// プールから使用可能なページを取得
 	page, poolIndex, err := p.kickPage()
 	if err != nil {
@@ -248,7 +213,7 @@ func (p *PoolManager) CreatePage() (disk.PageID, error) {
 	}
 
 	// ファイルから新しいページIDを取得
-	newPageID, err := p.fileManager.AllocateNewPage()
+	newPageID, err := p.fileManager.AllocNewPage()
 	if err != nil {
 		return disk.InvalidID, err
 	}
@@ -263,9 +228,8 @@ func (p *PoolManager) CreatePage() (disk.PageID, error) {
 }
 
 // 変更されたすべてのページをファイルに書き込み
-//
-//	返り値1: エラー情報
 func (p *PoolManager) Flush() error {
+	// ページテーブルの全ページをファイルに書き込み
 	for pageId, poolIndex := range p.pageTable {
 		page := p.pool.getPage(poolIndex)
 		if err := p.fileManager.WritePageData(pageId, page.GetData()); err != nil {
@@ -279,8 +243,6 @@ func (p *PoolManager) Flush() error {
 }
 
 // プールマネージャを閉じ、関連リソースを解放
-//
-//	返り値1: エラー情報
 func (p *PoolManager) Close() error {
 	// 変更されたページをファイルに書き込み
 	if err := p.Flush(); err != nil {

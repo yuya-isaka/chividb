@@ -27,7 +27,7 @@ func TestReadWrite(t *testing.T) {
 
 	t.Run("Read and Write Single Page", func(t *testing.T) {
 		// 書き込み
-		testPageID, err := fileManager.AllocateNewPage()
+		testPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
 		err = fileManager.WritePageData(testPageID, helloByte)
 		assert.NoError(err)
@@ -43,13 +43,13 @@ func TestReadWrite(t *testing.T) {
 
 	t.Run("Read and Write Multi Page", func(t *testing.T) {
 		// 書き込み
-		helloPageID, err := fileManager.AllocateNewPage()
+		helloPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
 		err = fileManager.WritePageData(helloPageID, helloByte)
 		assert.NoError(err)
 
 		// 書き込み
-		worldPageID, err := fileManager.AllocateNewPage()
+		worldPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
 		err = fileManager.WritePageData(worldPageID, worldByte)
 		assert.NoError(err)
@@ -71,7 +71,7 @@ func TestReadWrite(t *testing.T) {
 
 	t.Run("Read and Write Multi Page", func(t *testing.T) {
 		// 書き込み
-		helloPageID, err := fileManager.AllocateNewPage()
+		helloPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
 		err = fileManager.WritePageData(helloPageID, helloByte)
 		assert.NoError(err)
@@ -85,7 +85,7 @@ func TestReadWrite(t *testing.T) {
 		assert.Equal(helloByte, helloBuffer)
 
 		// 書き込み
-		worldPageID, err := fileManager.AllocateNewPage()
+		worldPageID, err := fileManager.AllocNewPage()
 		assert.NoError(err)
 		err = fileManager.WritePageData(worldPageID, worldByte)
 		assert.NoError(err)
