@@ -4,6 +4,9 @@ GO_CMD := go
 # テストコマンドのパスを設定
 GO_TEST := gotest
 
+# ドキュメントコマンドのパスを設定
+GO_DOC := godoc
+
 # ビルドするバイナリの名前を設定
 BINARY_NAME := chibidb
 
@@ -31,6 +34,15 @@ check:
 	$(GO_TEST) $(TEST_FLAGS) ./...
 	$(GO_CMD) tool cover $(COVER_FLAGS)
 	open cover.html
+
+fuzz:
+	$(GO_TEST) -fuzz=Fuzz ./disk
+	$(GO_TEST) -fuzz=Fuzz ./pool
+	$(GO_TEST) -fuzz=Fuzz ./btree
+
+# ドキュメントを生成してブラウザで開く
+doc:
+	$(GO_DOC) -http=:6060
 
 # ビルドしたバイナリを実行
 build:
