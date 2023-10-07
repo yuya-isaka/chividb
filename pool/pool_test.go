@@ -21,9 +21,10 @@ func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error
 	if err != nil {
 		return disk.InvalidPageID, err
 	}
-	fetchPage.SetData(bytes)
-	fetchPage.SetUpdate(true)
-	defer fetchPage.Unpin()
+
+	fetchPage.SetPageData(bytes)
+	fetchPage.SetUpdateFlag(true)
+	fetchPage.Unpin()
 
 	return pageID, nil
 }
@@ -66,7 +67,7 @@ func TestPool(t *testing.T) {
 
 		// テスト
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 	})
 
 	t.Run("Complex Pool 3", func(t *testing.T) {
@@ -93,7 +94,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -109,7 +110,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -119,7 +120,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetData())
+		assert.Equal(worldBytes, fetchPage.GetPageData())
 	})
 
 	t.Run("Pool 1", func(t *testing.T) {
@@ -146,7 +147,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -173,7 +174,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetData())
+		assert.Equal(worldBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -195,7 +196,7 @@ func TestPool(t *testing.T) {
 		assert.NoError(err)
 
 		// テスト (hello)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 	})
 
 	t.Run("Pool 2", func(t *testing.T) {
@@ -222,7 +223,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -236,7 +237,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetData())
+		assert.Equal(worldBytes, fetchPage.GetPageData())
 
 		// ======================================================================
 
@@ -245,7 +246,7 @@ func TestPool(t *testing.T) {
 		assert.NoError(err)
 
 		// テスト (hello)
-		assert.Equal(helloBytes, fetchPage.GetData())
+		assert.Equal(helloBytes, fetchPage.GetPageData())
 	})
 
 	t.Run("Fetch Nonexistent Page", func(t *testing.T) {

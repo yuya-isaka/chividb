@@ -50,10 +50,10 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 
 		// メタデータからルートID取得
 		// ルートページ取得
-		rootPage, err := poolManager.FetchPage(metaData.GetID())
+		rootPage, err := poolManager.FetchPage(metaData.GetRootID())
 		assert.NoError(err)
 
-		assert.Equal(disk.PageID(1), rootPage.GetID())
+		assert.Equal(disk.PageID(1), rootPage.GetPageID())
 
 		// ======================================================================
 

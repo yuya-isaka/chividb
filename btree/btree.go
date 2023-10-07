@@ -8,11 +8,21 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
-// Nodeの種類
+type NodeType interface {
+	xxxProtexted()
+}
+
+type nodetype string
+
+func (n nodetype) xxxProtexted() {}
+
 const (
-	LeafNodeType   = "LEAF    " // 葉ノード、8 bytes
-	BranchNodeType = "BRANCH  " // 枝ノード、8 bytes
+	// Nodeの種類
+	LeafNodeType   nodetype = "LEAF    " // 葉ノード、8 bytes
+	BranchNodeType nodetype = "BRANCH  " // 枝ノード、8 bytes
 )
+
+// ======================================================================
 
 // バイトスライスをdisk.PageIDに変換
 func toPageID(b []byte) disk.PageID {
@@ -50,9 +60,10 @@ type Meta struct {
 	header MetaHeader // 8 bytes
 }
 
+// rootIDも設定する
 func NewMeta(page *pool.Page) (*Meta, error) {
 	// 4096 bytes のページデータを取得
-	pageData := page.GetData()
+	pageData := page.GetPageData()
 	if len(pageData) != disk.PageSize {
 		return nil, fmt.Errorf("invalid page size: got %d, want %d", len(pageData), disk.PageSize)
 	}
@@ -65,15 +76,15 @@ func NewMeta(page *pool.Page) (*Meta, error) {
 	return meta, nil
 }
 
-func (m *Meta) GetID() disk.PageID {
+func (m *Meta) GetRootID() disk.PageID {
 	return toPageID(m.header.rootID)
 }
 
-func (m *Meta) SetID(pageID disk.PageID) error {
-	if pageID <= disk.InvalidPageID {
-		return fmt.Errorf("invalid page id: got %d", pageID)
+func (m *Meta) SetRootID(rootID disk.PageID) error {
+	if rootID <= disk.InvalidPageID {
+		return fmt.Errorf("invalid page id: got %d", rootID)
 	}
-	copy(m.header.rootID, to8Bytes(pageID))
+	copy(m.header.rootID, to8Bytes(rootID))
 	return nil
 }
 
@@ -90,7 +101,7 @@ type Node struct {
 
 func NewNode(page *pool.Page) (*Node, error) {
 	// 4096 bytes のページデータを取得
-	pageData := page.GetData()
+	pageData := page.GetPageData()
 	if len(pageData) != disk.PageSize {
 		return nil, fmt.Errorf("invalid page size: got %d, want %d", len(pageData), disk.PageSize)
 	}
@@ -104,19 +115,15 @@ func NewNode(page *pool.Page) (*Node, error) {
 	return node, nil
 }
 
-func (n *Node) GetNodeType() string {
-	return string(n.header.nodeType)
+func (n *Node) GetNodeType() NodeType {
+	return nodetype(n.header.nodeType)
 }
 
 // ノードのヘッダーを初期化
-func (n *Node) SetNodeType(nodeType string) error {
-	if nodeType != LeafNodeType && nodeType != BranchNodeType {
-		return fmt.Errorf("invalid node type: %s", nodeType)
+func (n *Node) SetNodeType(nodeType NodeType) {
+	if nt, ok := nodeType.(nodetype); ok {
+		copy(n.header.nodeType, nt)
 	}
-
-	copy(n.header.nodeType, nodeType)
-
-	return nil
 }
 
 // ======================================================================
@@ -152,6 +159,10 @@ type Leaf struct {
 }
 
 func NewLeaf(node *Node) (*Leaf, error) {
+	if nodetype(node.header.nodeType) != LeafNodeType {
+		return nil, fmt.Errorf("invalid node type: got %s, want %s", node.header.nodeType, LeafNodeType)
+	}
+
 	// 4088 bytes のノードボディを取得
 	nodeBody := node.body
 	if len(nodeBody) != disk.PageSize-8 {
@@ -174,6 +185,9 @@ func NewLeaf(node *Node) (*Leaf, error) {
 		},
 	}
 
+	// 初期化
+	leaf.reset()
+
 	return leaf, nil
 }
 
@@ -181,6 +195,7 @@ func (l *Leaf) reset() {
 	// prevID, nextIDをInvalidPageIDにセット
 	copy(l.header.prevID, to8Bytes(disk.InvalidPageID))
 	copy(l.header.nextID, to8Bytes(disk.InvalidPageID))
+
 	// スロット数0、空きスペースは全てのボディ
 	l.body.reset()
 }
@@ -246,8 +261,8 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 初期化: メタデータにルートIDをセット
-	if err := metaData.SetID(rootID); err != nil {
+	// 初期化
+	if err = metaData.SetRootID(rootID); err != nil {
 		return nil, err
 	}
 
@@ -257,17 +272,13 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 		return nil, err
 	}
 	// 初期化: ルートノードのノードタイプをセット (ルートノードも最初はリーフノード)
-	if err := rootNode.SetNodeType(LeafNodeType); err != nil {
-		return nil, err
-	}
+	rootNode.SetNodeType(LeafNodeType)
 
-	// ルートノードからリーフノード取得
-	leaf, err := NewLeaf(rootNode)
+	// ルートノードからリーフノード取得と初期化
+	_, err = NewLeaf(rootNode)
 	if err != nil {
 		return nil, err
 	}
-	// 初期化: リーフノード
-	leaf.reset()
 
 	return &BTree{
 		metaID: metaID, // メタデータのページIDはここでセットするから、SetMetaID()は不要
@@ -293,7 +304,7 @@ func (b *BTree) Clear(poolManager *pool.PoolManager) error {
 		return err
 	}
 
-	rootPage, err := poolManager.FetchPage(metaData.GetID())
+	rootPage, err := poolManager.FetchPage(metaData.GetRootID())
 	if err != nil {
 		return err
 	}

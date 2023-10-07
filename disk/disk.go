@@ -79,7 +79,6 @@ func (f *FileManager) checkSeek(pageID PageID, pageData []byte) error {
 
 // 指定ページIDのデータ読み込みを行う関数
 func (f *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
-
 	// パラメータチェックとファイルポインタの移動
 	if err := f.checkSeek(pageID, pageData); err != nil {
 		return err
@@ -95,7 +94,6 @@ func (f *FileManager) ReadPageData(pageID PageID, pageData []byte) error {
 
 // 指定ページIDへデータを書き込む関数
 func (f *FileManager) WritePageData(pageID PageID, pageData []byte) error {
-
 	// パラメータチェックとファイルポインタの移動
 	if err := f.checkSeek(pageID, pageData); err != nil {
 		return err
