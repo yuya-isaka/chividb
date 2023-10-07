@@ -123,13 +123,11 @@ func (po *Pool) clockSweep() (PoolIndex, error) {
 		page := po.getPage(nextKickIndex)
 
 		if page.GetPinCount() == NoReferencePin {
-			// ピンされていないページを見つけたら、そのインデックスを返す
-			return nextKickIndex, nil
+			return nextKickIndex, nil // ピンされていないページを見つけたら、そのインデックスを返す
 		} else {
 			checkedPageNum++
 			if checkedPageNum >= pageNum {
-				// 全てのページがピンされている場合はエラーを返す
-				return 0, errors.New("all pages are pinned")
+				return 0, errors.New("all pages are pinned") // 全てのページがピンされている場合はエラーを返す
 			}
 		}
 
@@ -192,8 +190,7 @@ func (pm *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 	// ページテーブルにページIDのページが存在するか確認
 	if poolIndex, ok := pm.pageTable[pageID]; ok {
 		page := pm.pool.getPage(poolIndex)
-		// ページ利用のためピンカウントを増加
-		page.addPin()
+		page.addPin()    // ページ利用のためピンカウントを増加
 		return page, nil // 存在すれば、そのページを返却
 	}
 
@@ -208,8 +205,7 @@ func (pm *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 	if err = pm.fileManager.ReadPageData(pageID, page.GetPageData()); err != nil {
 		return nil, err
 	}
-	// ページ利用のためピンカウントを増加
-	page.addPin()
+	page.addPin() // ページ利用のためピンカウントを増加
 	pm.pageTable[pageID] = poolIndex
 
 	return page, nil
