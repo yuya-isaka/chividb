@@ -8,17 +8,19 @@ import (
 )
 
 const (
-	InvalidIndex   = PoolIndex(^uint64(0)) // 無効なプールインデックス
-	NoReferencePin = Pin(-1)               // ピンがない状態
+	InvalidPoolIndex = PoolIndex(^uint64(0)) // 無効なプールインデックス
+	NoReferencePin   = Pin(-1)               // ピンがない状態
 )
 
 // プール内のページ位置を示す型
 type PoolIndex uint64
 
-// ページのピンカウントを示す型
+// ページの参照カウントを示す型
 type Pin int64
 
-// ストレージ（ファイル）の1ページを表す
+// =====================================================================================
+
+// ストレージの1ページを表す構造体
 type Page struct {
 	id     disk.PageID // ページの一意なID
 	data   []byte      // ページのデータ内容
@@ -79,7 +81,9 @@ func (p *Page) SetUpdate(update bool) {
 	p.update = update
 }
 
-// 複数のPageを管理するメモリプール
+// =====================================================================================
+
+// 複数のPageをバッファするメモリプール
 type Pool struct {
 	pages         []Page    // プール内の全ページ
 	nextKickIndex PoolIndex // 次にプールから削除するページのインデックス
@@ -106,7 +110,7 @@ func (p *Pool) getPage(index PoolIndex) *Page {
 	return &p.pages[index]
 }
 
-// プールからページを削除するインデックスの探索 (クロックスイープアルゴリズム)
+// クロックスイープアルゴリズム: プールからページを削除するインデックスの探索
 func (p *Pool) clockSweep() (PoolIndex, error) {
 	pageNum := len(p.pages) // プール内のページ数
 	checkedPageNum := 0     // チェックしたページ数
@@ -132,7 +136,7 @@ func (p *Pool) clockSweep() (PoolIndex, error) {
 	}
 }
 
-// ======================================================================
+// =====================================================================================
 
 // ページプールとページテーブルを管理
 type PoolManager struct {
@@ -156,7 +160,7 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 	// プールから使用可能なページインデックスを探索
 	poolIndex, err := p.pool.clockSweep()
 	if err != nil {
-		return nil, InvalidIndex, err
+		return nil, InvalidPoolIndex, err
 	}
 
 	// ページがページテーブルに登録されていれば、登録を削除
@@ -166,7 +170,7 @@ func (p *PoolManager) kickPage() (*Page, PoolIndex, error) {
 	// ページが更新されていれば、その内容をファイルに書き込み
 	if page.GetUpdate() {
 		if err := p.fileManager.WritePageData(page.GetID(), page.GetData()); err != nil {
-			return nil, InvalidIndex, err
+			return nil, InvalidPoolIndex, err
 		}
 	}
 
