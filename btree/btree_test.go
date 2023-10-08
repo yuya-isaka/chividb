@@ -33,6 +33,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// ======================================================================
 
 		// BTree準備
+		// TODO ここでtreeとルートIDを渡せばいい？ (メタデータはユーザは意識しなくていい？)
 		tree, err := btree.NewBTree(poolManager)
 		assert.NoError(err)
 

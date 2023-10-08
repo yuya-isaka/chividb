@@ -8,6 +8,32 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
+// ======================================================================
+
+/*
+
+	If Meta
+		MetaHeader (RootのページID保持) 		 ... 8 bytes
+		MetaBody (空っぽ) 									... 4088 bytes
+
+	If Node
+		NodeHeader (Nodeの種類保持) 			... 8 bytes
+		NodeBody (Leaf or Branch) 			 ... 4088 bytes
+			If Leaf
+				LeafHeader (Leafの前後のページID保持) 		 ... 16 bytes
+				LeafBody (Slot) 												... 4072 bytes
+					SlotHeader (スロット数と空きスペース保持) 			 ... 4 bytes
+					SlotBody (KeyとValue) 										 ... 4068 bytes
+			If Branch
+				BranchHeader (右のページID保持) 					... 8 bytes
+				BranchBody (Slot) 							 				... 4080 bytes
+					SlotHeader (スロット数と空きスペース保持) 			 ... 4 bytes
+					SlotBody (KeyとValue) 										 ... 4076 bytes
+
+*/
+
+// ======================================================================
+
 type NodeType interface {
 	xxxProtexted()
 }
