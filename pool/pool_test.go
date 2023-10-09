@@ -9,6 +9,10 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
+// func TestMain(m *testing.M) {
+// 	goleak.VerifyTestMain(m)
+// }
+
 // ページ作って、bytesで初期化したデータを用意する。Unpinして返す。
 func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error) {
 	// ページ作成

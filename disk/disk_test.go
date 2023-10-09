@@ -8,6 +8,10 @@ import (
 	"github.com/yuya-isaka/chibidb/disk"
 )
 
+// func TestMain(m *testing.M) {
+// 	goleak.VerifyTestMain(m)
+// }
+
 func TestReadWrite(t *testing.T) {
 	// 準備
 	assert := assert.New(t)

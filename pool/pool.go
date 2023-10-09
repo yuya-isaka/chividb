@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	InvalidPoolIndex = PoolIndex(^uint64(0)) // 無効なプールインデックス
-	NoReferencePin   = Pin(-1)               // ピンがない状態
+	InvalidPoolIndex = PoolIndex(-1) // 無効なプールインデックス
+	NoReferencePin   = Pin(-1)       // ピンがない状態
 )
 
 // プール内のページ位置を示す型
-type PoolIndex uint64
+type PoolIndex int64
 
 // ページの参照カウントを示す型
 type Pin int64
@@ -127,7 +127,7 @@ func (po *Pool) clockSweep() (PoolIndex, error) {
 		} else {
 			checkedPageNum++
 			if checkedPageNum >= pageNum {
-				return 0, errors.New("all pages are pinned") // 全てのページがピンされている場合はエラーを返す
+				return InvalidPoolIndex, errors.New("all pages are pinned") // 全てのページがピンされている場合はエラーを返す
 			}
 		}
 

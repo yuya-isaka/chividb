@@ -11,6 +11,10 @@ import (
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
+// func TestMain(m *testing.M) {
+// 	goleak.VerifyTestMain(m)
+// }
+
 func TestBTree_InsertAndSearch(t *testing.T) {
 
 	// 準備
