@@ -3,6 +3,7 @@ package btree_test
 import (
 	"os"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yuya-isaka/chibidb/btree"
@@ -48,6 +49,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// メタデータ生成
 		metaData, err := btree.NewMeta(metaPage)
 		assert.NoError(err)
+		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
 
 		// メタデータからルートID取得
 		// ルートページ取得
@@ -61,6 +63,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// ルートノード生成
 		rootNode, err := btree.NewNode(rootPage)
 		assert.NoError(err)
+		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
 
 		// ルートノードも最初はリーフタイプ
 		assert.Equal(btree.LeafNodeType, rootNode.GetNodeType())
@@ -70,6 +73,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// リーフノード生成
 		leaf, err := btree.NewLeaf(rootNode)
 		assert.NoError(err)
+		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 
 		// テスト
 		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
