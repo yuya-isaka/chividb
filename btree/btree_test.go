@@ -3,7 +3,6 @@ package btree
 import (
 	"os"
 	"testing"
-	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yuya-isaka/chibidb/disk"
@@ -47,11 +46,8 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err := NewNode(metaPage)
 		assert.NoError(err)
-		metaData, err := NewMeta(metaNode)
-		assert.NoError(err)
 
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
-		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
 
 		// ======================================================================
 
@@ -62,7 +58,6 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
-		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
 		assert.Equal(LeafNodeType, rootNode.getNodeType())
 
 		// ======================================================================
@@ -71,11 +66,10 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		leaf, err := NewLeaf(rootNode)
 		assert.NoError(err)
 
-		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
 		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlots())
-		assert.Equal(uint16(4068), leaf.GetFreeSpace())
+		assert.Equal(uint16(0), leaf.GetNumSlot())
+		assert.Equal(uint16(4068), leaf.GetNumFree())
 
 		// ======================================================================
 
@@ -120,12 +114,9 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err := NewNode(metaPage)
 		assert.NoError(err)
-		metaData, err := NewMeta(metaNode)
-		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
-		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
 
 		// ======================================================================
@@ -136,7 +127,6 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		rootNode, err := NewNode(rootPage)
 		assert.NoError(err)
 
-		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
 		assert.Equal(LeafNodeType, rootNode.getNodeType())
 
@@ -146,11 +136,10 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		leaf, err := NewLeaf(rootNode)
 		assert.NoError(err)
 
-		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
 		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlots())
-		assert.Equal(uint16(4068), leaf.GetFreeSpace())
+		assert.Equal(uint16(0), leaf.GetNumSlot())
+		assert.Equal(uint16(4068), leaf.GetNumFree())
 
 		// ======================================================================
 
@@ -171,12 +160,9 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err = NewNode(metaPage)
 		assert.NoError(err)
-		metaData, err = NewMeta(metaNode)
-		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
-		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
 
 		// ======================================================================
@@ -187,7 +173,6 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		rootNode, err = NewNode(rootPage)
 		assert.NoError(err)
 
-		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
 		assert.Equal(LeafNodeType, rootNode.getNodeType())
 
@@ -197,11 +182,11 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		leaf, err = NewLeaf(rootNode)
 		assert.NoError(err)
 
-		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
+		// assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
 		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlots())
-		assert.Equal(uint16(4068), leaf.GetFreeSpace())
+		assert.Equal(uint16(0), leaf.GetNumSlot())
+		assert.Equal(uint16(4068), leaf.GetNumFree())
 
 		// ======================================================================
 

@@ -44,6 +44,7 @@ func (p *Page) GetPageID() disk.PageID {
 // ページIDの設定
 // 渡されるページIDは、無効なページIDであってはならない
 func (p *Page) SetPageID(newID disk.PageID) {
+	p.update = true
 	p.id = newID
 }
 
@@ -54,6 +55,7 @@ func (p *Page) GetPageData() []byte {
 
 // ページデータの設定
 func (p *Page) SetPageData(data []byte) {
+	p.update = true
 	p.data = data
 }
 
@@ -77,12 +79,12 @@ func (p *Page) GetUpdateFlag() bool {
 	return p.update
 }
 
-// func (p *Page) GetUpdateFlagRef() *bool {
-// 	return &p.update
-// }
+func (p *Page) GetUpdateFlagRef() *bool {
+	return &p.update
+}
 
 // 更新フラグの設定
-func (p *Page) SetUpdateFlag(update bool) {
+func (p *Page) setUpdateFlag(update bool) {
 	p.update = update
 }
 
@@ -175,6 +177,7 @@ func (pm *PoolManager) kickPage() (*Page, PoolIndex, error) {
 	// ページが更新されていれば、その内容をファイルに書き込み
 	if page.GetUpdateFlag() {
 		if err := pm.fileManager.WritePageData(page.GetPageID(), page.GetPageData()); err != nil {
+			page.setUpdateFlag(false)
 			return nil, InvalidPoolIndex, err
 		}
 	}
@@ -204,7 +207,7 @@ func (pm *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
 		return nil, err
 	}
 	page.SetPageID(pageID)
-	page.SetUpdateFlag(false)
+	page.setUpdateFlag(false)
 	// ファイルからページデータを読み込み
 	if err = pm.fileManager.ReadPageData(pageID, page.GetPageData()); err != nil {
 		return nil, err
@@ -233,7 +236,6 @@ func (pm *PoolManager) CreatePage() (disk.PageID, error) {
 	// 新しいページの設定を行い、ページテーブルに登録
 	page.reset()
 	page.SetPageID(newPageID)
-	page.SetUpdateFlag(true)
 
 	pm.pageTable[newPageID] = poolIndex
 
@@ -247,7 +249,7 @@ func (pm *PoolManager) Sync() error {
 		if err := pm.fileManager.WritePageData(pageId, page.GetPageData()); err != nil {
 			return err
 		}
-		page.SetUpdateFlag(false)
+		page.setUpdateFlag(false)
 	}
 
 	// ファイル内容をディスクと同期

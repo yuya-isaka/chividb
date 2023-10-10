@@ -13,7 +13,7 @@ import (
 // }
 
 // ページ作って、bytesで初期化したデータを用意する。Unpinして返す。
-func createPage(poolManager *PoolManager, bytes []byte) (disk.PageID, error) {
+func createPageTest(poolManager *PoolManager, bytes []byte) (disk.PageID, error) {
 	// ページ作成
 	pageID, err := poolManager.CreatePage()
 	if err != nil {
@@ -27,7 +27,6 @@ func createPage(poolManager *PoolManager, bytes []byte) (disk.PageID, error) {
 	}
 
 	fetchPage.SetPageData(bytes)
-	fetchPage.SetUpdateFlag(true)
 	fetchPage.Unpin()
 
 	return pageID, nil
@@ -62,7 +61,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPage(poolManager, helloBytes)
+		helloID, err := createPageTest(poolManager, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -89,7 +88,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPage(poolManager, helloBytes)
+		helloID, err := createPageTest(poolManager, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -103,7 +102,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPage(poolManager, worldBytes)
+		worldID, err := createPageTest(poolManager, worldBytes)
 		assert.NoError(err)
 
 		// ======================================================================
@@ -142,7 +141,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPage(poolManager, helloBytes)
+		helloID, err := createPageTest(poolManager, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -169,7 +168,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPage(poolManager, worldBytes)
+		worldID, err := createPageTest(poolManager, worldBytes)
 		assert.NoError(err)
 
 		// fetch (world)
@@ -218,7 +217,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPage(poolManager, helloBytes)
+		helloID, err := createPageTest(poolManager, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -232,7 +231,7 @@ func TestPool(t *testing.T) {
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPage(poolManager, worldBytes)
+		worldID, err := createPageTest(poolManager, worldBytes)
 		assert.NoError(err)
 
 		// fetch (world)
