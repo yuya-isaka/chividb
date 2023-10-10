@@ -137,9 +137,9 @@ func NewMeta(node *Node) (*Meta, error) {
 	return meta, nil
 }
 
-// func (m *Meta) getRootID() disk.PageID {
-// 	return toPageID(m.rootID)
-// }
+func (m *Meta) getRootID() disk.PageID {
+	return toPageID(m.rootID)
+}
 
 func (m *Meta) setRootID(rootID disk.PageID) error {
 	if rootID <= disk.InvalidPageID {
@@ -225,36 +225,36 @@ type BTree struct {
 }
 
 // 生成される[metaPage]と[rootPage]は、btreeが存在する限り、常に存在する（unpinされない）
-func NewBTree(poolManager *pool.PoolManager) (*BTree, disk.PageID, error) {
+func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 	// メタページ作成
 	metaID, err := poolManager.CreatePage()
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	// ルートページ作成
 	rootID, err := poolManager.CreatePage()
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 
 	// メタページ取得
 	metaPage, err := poolManager.FetchPage(metaID)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	// メタノード作成と初期化
 	metaNode, err := NewNode(metaPage)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	metaNode.setNodeType(MetaNodeType)
 	// メタデータ取得と初期化
 	metaData, err := NewMeta(metaNode)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	if err = metaData.setRootID(rootID); err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 
 	// メタページをアンピン
@@ -263,20 +263,20 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, disk.PageID, error) {
 	// ルートページ取得
 	rootPage, err := poolManager.FetchPage(rootID)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 
 	// ルートノード作成と初期化
 	rootNode, err := NewNode(rootPage)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	rootNode.setNodeType(LeafNodeType)
 
 	// ルートノードからリーフノード取得と初期化
 	leaf, err := NewLeaf(rootNode)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 	leaf.reset()
 
@@ -285,7 +285,7 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, disk.PageID, error) {
 
 	return &BTree{
 		metaID: metaID, // メタデータのページIDはここでセットするから、SetMetaID()は不要
-	}, rootID, nil
+	}, nil
 }
 
 func (b *BTree) GetMetaID() disk.PageID {

@@ -34,7 +34,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		defer poolManager.Close()
 
 		// BTree
-		tree, rootID, err := NewBTree(poolManager)
+		tree, err := NewBTree(poolManager)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(0), tree.GetMetaID())
@@ -46,13 +46,16 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err := NewNode(metaPage)
 		assert.NoError(err)
+		metaData, err := NewMeta(metaNode)
+		assert.NoError(err)
 
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
 
 		// ルートチェック
-		rootPage, err := poolManager.FetchPage(rootID)
+		rootPage, err := poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
 		rootNode, err := NewNode(rootPage)
 		assert.NoError(err)
@@ -102,7 +105,7 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		defer poolManager.Close()
 
 		// BTree
-		tree, rootID, err := NewBTree(poolManager)
+		tree, err := NewBTree(poolManager)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(0), tree.GetMetaID())
@@ -114,15 +117,18 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err := NewNode(metaPage)
 		assert.NoError(err)
+		metaData, err := NewMeta(metaNode)
+		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
 
 		// ルートチェック
-		rootPage, err := poolManager.FetchPage(rootID)
+		rootPage, err := poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
 		rootNode, err := NewNode(rootPage)
 		assert.NoError(err)
@@ -160,15 +166,18 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.NoError(err)
 		metaNode, err = NewNode(metaPage)
 		assert.NoError(err)
+		metaData, err = NewMeta(metaNode)
+		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
 		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
 
 		// ルートチェック
-		rootPage, err = poolManager.FetchPage(rootID)
+		rootPage, err = poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
 		rootNode, err = NewNode(rootPage)
 		assert.NoError(err)
@@ -196,6 +205,44 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		assert.Equal(pool.Pin(-1), rootPage.GetPinCount())
 
 	})
+
+	// t.Run("Insert", func(t *testing.T) {
+	// 	// テストデータ準備
+	// 	testKey := []byte("key1")
+	// 	testValue := []byte("value1")
+
+	// 	// ファイルマネージャ準備
+	// 	testFile := "testfile"
+	// 	fileManager, err := disk.NewFileManager(testFile)
+	// 	assert.NoError(err)
+	// 	defer os.Remove(testFile)
+
+	// 	// プール準備
+	// 	testPool := pool.NewPool(10)
+
+	// 	// プールマネージャ準備
+	// 	poolManager := pool.NewPoolManager(fileManager, testPool)
+	// 	defer poolManager.Close()
+
+	// 	// BTree準備
+	// 	tree, err := NewBTree(poolManager)
+	// 	assert.NoError(err)
+
+	// 	// ======================================================================
+
+	// 	// 挿入
+	// 	err = tree.Insert(testKey, testValue)
+	// 	assert.NoError(err)
+
+	// 	// 検索（キー）
+	// 	itr, err := tree.Search(&btree.Key{key: testKey})
+	// 	assert.NoError(err)
+	// 	// Get
+	// 	resultKey, resultValue, err := itr.Get()
+	// 	assert.NoError(err)
+	// 	assert.Equal(testKey, resultKey)
+	// 	assert.Equal(testValue, resultValue)
+	// })
 
 	// t.Run("Insert and Search", func(t *testing.T) {
 
