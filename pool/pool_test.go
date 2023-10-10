@@ -1,4 +1,4 @@
-package pool_test
+package pool
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/yuya-isaka/chibidb/disk"
-	"github.com/yuya-isaka/chibidb/pool"
 )
 
 // func TestMain(m *testing.M) {
@@ -14,7 +13,7 @@ import (
 // }
 
 // ページ作って、bytesで初期化したデータを用意する。Unpinして返す。
-func createPage(poolManager *pool.PoolManager, bytes []byte) (disk.PageID, error) {
+func createPage(poolManager *PoolManager, bytes []byte) (disk.PageID, error) {
 	// ページ作成
 	pageID, err := poolManager.CreatePage()
 	if err != nil {
@@ -56,8 +55,8 @@ func TestPool(t *testing.T) {
 		defer os.Remove(testFile)
 
 		// プール準備
-		poolTest := pool.NewPool(3)
-		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		poolTest := NewPool(3)
+		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
 		// ======================================================================
@@ -83,8 +82,8 @@ func TestPool(t *testing.T) {
 		defer os.Remove(testFile)
 
 		// プール準備
-		poolTest := pool.NewPool(3)
-		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		poolTest := NewPool(3)
+		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
 		// ======================================================================
@@ -136,8 +135,8 @@ func TestPool(t *testing.T) {
 		defer os.Remove(testFile)
 
 		// プール準備
-		poolTest := pool.NewPool(1)
-		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		poolTest := NewPool(1)
+		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
 		// ======================================================================
@@ -165,7 +164,7 @@ func TestPool(t *testing.T) {
 		// 参照カウンタを減らすことで、新しいページが作れるようになる
 		// helloPageとfetchPageは同じページを参照しており、そのページのカウントを２回下げることで-1になる
 		fetchPage.Unpin()
-		assert.Equal(pool.Pin(-1), fetchPage.GetPinCount())
+		assert.Equal(Pin(-1), fetchPage.GetPinCount())
 
 		// ======================================================================
 
@@ -189,7 +188,7 @@ func TestPool(t *testing.T) {
 		assert.Equal("all pages are pinned", err.Error())
 
 		fetchPage.Unpin()
-		assert.Equal(pool.NoReferencePin, fetchPage.GetPinCount())
+		assert.Equal(NoReferencePin, fetchPage.GetPinCount())
 
 		// ======================================================================
 
@@ -212,8 +211,8 @@ func TestPool(t *testing.T) {
 		defer os.Remove(testFile)
 
 		// プール準備
-		poolTest := pool.NewPool(2)
-		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		poolTest := NewPool(2)
+		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
 		// ======================================================================
@@ -262,8 +261,8 @@ func TestPool(t *testing.T) {
 		defer os.Remove(testFile)
 
 		// プール準備
-		poolTest := pool.NewPool(2)
-		poolManager := pool.NewPoolManager(fileManager, poolTest)
+		poolTest := NewPool(2)
+		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
 
 		// ======================================================================

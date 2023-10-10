@@ -77,6 +77,10 @@ func (p *Page) GetUpdateFlag() bool {
 	return p.update
 }
 
+// func (p *Page) GetUpdateFlagRef() *bool {
+// 	return &p.update
+// }
+
 // 更新フラグの設定
 func (p *Page) SetUpdateFlag(update bool) {
 	p.update = update

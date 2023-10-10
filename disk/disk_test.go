@@ -1,11 +1,10 @@
-package disk_test
+package disk
 
 import (
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/yuya-isaka/chibidb/disk"
 )
 
 // func TestMain(m *testing.M) {
@@ -17,16 +16,16 @@ func TestReadWrite(t *testing.T) {
 	assert := assert.New(t)
 
 	// テストデータ準備
-	helloByte := make([]byte, disk.PageSize)
+	helloByte := make([]byte, PageSize)
 	copy(helloByte, "Hello")
-	worldByte := make([]byte, disk.PageSize)
+	worldByte := make([]byte, PageSize)
 	copy(worldByte, "World")
 
 	t.Run("Read and Write Single Page", func(t *testing.T) {
 
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		fileManager, err := NewFileManager(testFile)
 		assert.NoError(err)
 		defer fileManager.Close()
 		defer os.Remove(testFile)
@@ -40,7 +39,7 @@ func TestReadWrite(t *testing.T) {
 		assert.NoError(err)
 
 		// 読み込み
-		readBuffer := make([]byte, disk.PageSize)
+		readBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(testPageID, readBuffer)
 		assert.NoError(err)
 
@@ -52,7 +51,7 @@ func TestReadWrite(t *testing.T) {
 
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		fileManager, err := NewFileManager(testFile)
 		assert.NoError(err)
 		defer fileManager.Close()
 		defer os.Remove(testFile)
@@ -72,12 +71,12 @@ func TestReadWrite(t *testing.T) {
 		assert.NoError(err)
 
 		// 読み込み
-		helloBuffer := make([]byte, disk.PageSize)
+		helloBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(helloPageID, helloBuffer)
 		assert.NoError(err)
 
 		// 読み込み
-		worldBuffer := make([]byte, disk.PageSize)
+		worldBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(worldPageID, worldBuffer)
 		assert.NoError(err)
 
@@ -90,7 +89,7 @@ func TestReadWrite(t *testing.T) {
 
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		fileManager, err := NewFileManager(testFile)
 		assert.NoError(err)
 		defer fileManager.Close()
 		defer os.Remove(testFile)
@@ -104,7 +103,7 @@ func TestReadWrite(t *testing.T) {
 		assert.NoError(err)
 
 		// 読み込み
-		helloBuffer := make([]byte, disk.PageSize)
+		helloBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(helloPageID, helloBuffer)
 		assert.NoError(err)
 
@@ -120,7 +119,7 @@ func TestReadWrite(t *testing.T) {
 		assert.NoError(err)
 
 		// 読み込み
-		worldBuffer := make([]byte, disk.PageSize)
+		worldBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(worldPageID, worldBuffer)
 		assert.NoError(err)
 
@@ -131,7 +130,7 @@ func TestReadWrite(t *testing.T) {
 	t.Run("Error Handling: Read Non-Existent Page", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		fileManager, err := NewFileManager(testFile)
 		assert.NoError(err)
 		defer fileManager.Close()
 		defer os.Remove(testFile)
@@ -139,8 +138,8 @@ func TestReadWrite(t *testing.T) {
 		// ======================================================================
 
 		// 読み込み: 存在しないページIDを指定
-		nonExistentPageID := disk.InvalidPageID
-		errBuffer := make([]byte, disk.PageSize)
+		nonExistentPageID := InvalidPageID
+		errBuffer := make([]byte, PageSize)
 		err = fileManager.ReadPageData(nonExistentPageID, errBuffer)
 
 		// テスト: エラーが返されるか
@@ -150,8 +149,8 @@ func TestReadWrite(t *testing.T) {
 		// ======================================================================
 
 		// 読み込み: 存在しないページIDを指定
-		nonExistentPageID = disk.PageID(0)
-		errBuffer = make([]byte, disk.PageSize)
+		nonExistentPageID = PageID(0)
+		errBuffer = make([]byte, PageSize)
 		err = fileManager.ReadPageData(nonExistentPageID, errBuffer)
 
 		// テスト: エラーが出て空のページが返されるか
@@ -162,7 +161,7 @@ func TestReadWrite(t *testing.T) {
 	t.Run("Error Handling: Write Non-Existent Page", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		fileManager, err := NewFileManager(testFile)
 		assert.NoError(err)
 		defer fileManager.Close()
 		defer os.Remove(testFile)
@@ -170,7 +169,7 @@ func TestReadWrite(t *testing.T) {
 		// ======================================================================
 
 		// 書き込み: 存在しないページIDを指定
-		nonExistentPageID := disk.InvalidPageID
+		nonExistentPageID := InvalidPageID
 		err = fileManager.WritePageData(nonExistentPageID, helloByte)
 
 		// テスト: エラーが返されるか

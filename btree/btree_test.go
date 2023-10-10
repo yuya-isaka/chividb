@@ -1,4 +1,4 @@
-package btree_test
+package btree
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 	"unsafe"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/yuya-isaka/chibidb/btree"
 	"github.com/yuya-isaka/chibidb/disk"
 	"github.com/yuya-isaka/chibidb/pool"
 )
@@ -22,64 +21,57 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 
 	t.Run("Create BTree", func(t *testing.T) {
 
-		// ファイルマネージャ準備
+		// ファイルマネージャ
 		testFile := "testfile"
 		fileManager, err := disk.NewFileManager(testFile)
 		assert.NoError(err)
 		defer os.Remove(testFile)
 
-		// プール準備
+		// プール
 		testPool := pool.NewPool(10)
 
-		// プールマネージャ準備
+		// プールマネージャ
 		poolManager := pool.NewPoolManager(fileManager, testPool)
 		defer poolManager.Close()
 
-		// ======================================================================
-
-		// BTree準備
-		// TODO ここでtreeとルートIDを渡せばいい？ (メタデータはユーザは意識しなくていい？)
-		tree, err := btree.NewBTree(poolManager)
+		// BTree
+		tree, rootID, err := NewBTree(poolManager)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(0), tree.GetMetaID())
 
 		// ======================================================================
 
-		// メタページ取得
+		// メタチェック
 		metaPage, err := poolManager.FetchPage(tree.GetMetaID())
 		assert.NoError(err)
-
-		// メタデータ生成
-		metaData, err := btree.NewMeta(metaPage)
+		metaNode, err := NewNode(metaPage)
 		assert.NoError(err)
+		metaData, err := NewMeta(metaNode)
+		assert.NoError(err)
+
+		assert.Equal(MetaNodeType, metaNode.getNodeType())
 		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
 
-		// メタデータからルートID取得
-		// ルートページ取得
-		rootPage, err := poolManager.FetchPage(metaData.GetRootID())
+		// ======================================================================
+
+		// ルートチェック
+		rootPage, err := poolManager.FetchPage(rootID)
+		assert.NoError(err)
+		rootNode, err := NewNode(rootPage)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
-
-		// ======================================================================
-
-		// ルートノード生成
-		rootNode, err := btree.NewNode(rootPage)
-		assert.NoError(err)
 		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
-
-		// ルートノードも最初はリーフタイプ
-		assert.Equal(btree.LeafNodeType, rootNode.GetNodeType())
+		assert.Equal(LeafNodeType, rootNode.getNodeType())
 
 		// ======================================================================
 
-		// リーフノード生成
-		leaf, err := btree.NewLeaf(rootNode)
+		// リーフチェック
+		leaf, err := NewLeaf(rootNode)
 		assert.NoError(err)
-		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 
-		// テスト
+		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
 		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
 		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
 		assert.Equal(uint16(0), leaf.GetNumSlots())
@@ -87,13 +79,133 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 
 		// ======================================================================
 
-		// Tree削除
-		err = tree.Clear(poolManager)
-		assert.NoError(err)
-
 		// テストで作成したページをアンピン
 		metaPage.Unpin()
 		rootPage.Unpin()
+
+		assert.Equal(pool.Pin(-1), metaPage.GetPinCount())
+		assert.Equal(pool.Pin(-1), rootPage.GetPinCount())
+	})
+
+	// ======================================================================
+	// ======================================================================
+
+	t.Run("Create Read BTree with Pool 1", func(t *testing.T) {
+
+		// ファイルマネージャ
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer os.Remove(testFile)
+
+		// ======================================================================
+
+		// プール
+		testPool := pool.NewPool(1)
+
+		// プールマネージャ
+		poolManager := pool.NewPoolManager(fileManager, testPool)
+		defer poolManager.Close()
+
+		// BTree
+		tree, rootID, err := NewBTree(poolManager)
+		assert.NoError(err)
+
+		assert.Equal(disk.PageID(0), tree.GetMetaID())
+
+		// ======================================================================
+
+		// メタチェック
+		metaPage, err := poolManager.FetchPage(tree.GetMetaID())
+		assert.NoError(err)
+		metaNode, err := NewNode(metaPage)
+		assert.NoError(err)
+		metaData, err := NewMeta(metaNode)
+		assert.NoError(err)
+
+		metaPage.Unpin() // メタページをアンピン
+
+		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
+		assert.Equal(MetaNodeType, metaNode.getNodeType())
+
+		// ======================================================================
+
+		// ルートチェック
+		rootPage, err := poolManager.FetchPage(rootID)
+		assert.NoError(err)
+		rootNode, err := NewNode(rootPage)
+		assert.NoError(err)
+
+		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
+		assert.Equal(disk.PageID(1), rootPage.GetPageID())
+		assert.Equal(LeafNodeType, rootNode.getNodeType())
+
+		// ======================================================================
+
+		// リーフチェック
+		leaf, err := NewLeaf(rootNode)
+		assert.NoError(err)
+
+		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
+		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
+		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
+		assert.Equal(uint16(0), leaf.GetNumSlots())
+		assert.Equal(uint16(4068), leaf.GetFreeSpace())
+
+		// ======================================================================
+
+		// テストで作成したページをアンピン
+		rootPage.Unpin()
+
+		assert.Equal(pool.Pin(-1), metaPage.GetPinCount())
+		assert.Equal(pool.Pin(-1), rootPage.GetPinCount())
+
+		poolManager.Sync()
+
+		// ======================================================================
+		// ======================================================================
+		// ======================================================================
+
+		// メタチェック
+		metaPage, err = poolManager.FetchPage(tree.GetMetaID())
+		assert.NoError(err)
+		metaNode, err = NewNode(metaPage)
+		assert.NoError(err)
+		metaData, err = NewMeta(metaNode)
+		assert.NoError(err)
+
+		metaPage.Unpin() // メタページをアンピン
+
+		assert.Equal(uintptr(24), unsafe.Sizeof(*metaData))
+		assert.Equal(MetaNodeType, metaNode.getNodeType())
+
+		// ======================================================================
+
+		// ルートチェック
+		rootPage, err = poolManager.FetchPage(rootID)
+		assert.NoError(err)
+		rootNode, err = NewNode(rootPage)
+		assert.NoError(err)
+
+		assert.Equal(uintptr(48), unsafe.Sizeof(*rootNode))
+		assert.Equal(disk.PageID(1), rootPage.GetPageID())
+		assert.Equal(LeafNodeType, rootNode.getNodeType())
+
+		// ======================================================================
+
+		// リーフチェック
+		leaf, err = NewLeaf(rootNode)
+		assert.NoError(err)
+
+		assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
+		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
+		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
+		assert.Equal(uint16(0), leaf.GetNumSlots())
+		assert.Equal(uint16(4068), leaf.GetFreeSpace())
+
+		// ======================================================================
+
+		rootPage.Unpin() // ルートページをアンピン
 
 		assert.Equal(pool.Pin(-1), metaPage.GetPinCount())
 		assert.Equal(pool.Pin(-1), rootPage.GetPinCount())
