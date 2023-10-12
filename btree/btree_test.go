@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/yuya-isaka/chibidb/btree/leaf"
+	"github.com/yuya-isaka/chibidb/btree/node"
 	"github.com/yuya-isaka/chibidb/disk"
 	"github.com/yuya-isaka/chibidb/pool"
 )
@@ -44,12 +46,12 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// メタチェック
 		metaPage, err := poolManager.FetchPage(tree.GetMetaID())
 		assert.NoError(err)
-		metaNode, err := NewNode(metaPage)
+		metaNode, err := node.NewNode(metaPage)
 		assert.NoError(err)
 		metaData, err := NewMeta(metaNode)
 		assert.NoError(err)
 
-		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(node.MetaNodeType, metaNode.GetNodeType())
 		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
@@ -57,22 +59,22 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// ルートチェック
 		rootPage, err := poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
-		rootNode, err := NewNode(rootPage)
+		rootNode, err := node.NewNode(rootPage)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
-		assert.Equal(LeafNodeType, rootNode.getNodeType())
+		assert.Equal(node.LeafNodeType, rootNode.GetNodeType())
 
 		// ======================================================================
 
 		// リーフチェック
-		leaf, err := NewLeaf(rootNode)
+		l, err := leaf.NewLeaf(rootNode)
 		assert.NoError(err)
 
-		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
-		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlot())
-		assert.Equal(uint16(4068), leaf.GetNumFree())
+		assert.Equal(disk.InvalidPageID, l.GetPrevID())
+		assert.Equal(disk.InvalidPageID, l.GetNextID())
+		assert.Equal(uint16(0), l.GetSlotNum())
+		assert.Equal(uint16(4068), l.GetFreeNum())
 
 		// ======================================================================
 
@@ -115,14 +117,14 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// メタチェック
 		metaPage, err := poolManager.FetchPage(tree.GetMetaID())
 		assert.NoError(err)
-		metaNode, err := NewNode(metaPage)
+		metaNode, err := node.NewNode(metaPage)
 		assert.NoError(err)
 		metaData, err := NewMeta(metaNode)
 		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
-		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(node.MetaNodeType, metaNode.GetNodeType())
 		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
@@ -130,22 +132,22 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// ルートチェック
 		rootPage, err := poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
-		rootNode, err := NewNode(rootPage)
+		rootNode, err := node.NewNode(rootPage)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
-		assert.Equal(LeafNodeType, rootNode.getNodeType())
+		assert.Equal(node.LeafNodeType, rootNode.GetNodeType())
 
 		// ======================================================================
 
 		// リーフチェック
-		leaf, err := NewLeaf(rootNode)
+		l, err := leaf.NewLeaf(rootNode)
 		assert.NoError(err)
 
-		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
-		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlot())
-		assert.Equal(uint16(4068), leaf.GetNumFree())
+		assert.Equal(disk.InvalidPageID, l.GetPrevID())
+		assert.Equal(disk.InvalidPageID, l.GetNextID())
+		assert.Equal(uint16(0), l.GetSlotNum())
+		assert.Equal(uint16(4068), l.GetFreeNum())
 
 		// ======================================================================
 
@@ -164,14 +166,14 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// メタチェック
 		metaPage, err = poolManager.FetchPage(tree.GetMetaID())
 		assert.NoError(err)
-		metaNode, err = NewNode(metaPage)
+		metaNode, err = node.NewNode(metaPage)
 		assert.NoError(err)
 		metaData, err = NewMeta(metaNode)
 		assert.NoError(err)
 
 		metaPage.Unpin() // メタページをアンピン
 
-		assert.Equal(MetaNodeType, metaNode.getNodeType())
+		assert.Equal(node.MetaNodeType, metaNode.GetNodeType())
 		assert.Equal(disk.PageID(1), metaData.getRootID())
 
 		// ======================================================================
@@ -179,23 +181,23 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 		// ルートチェック
 		rootPage, err = poolManager.FetchPage(metaData.getRootID())
 		assert.NoError(err)
-		rootNode, err = NewNode(rootPage)
+		rootNode, err = node.NewNode(rootPage)
 		assert.NoError(err)
 
 		assert.Equal(disk.PageID(1), rootPage.GetPageID())
-		assert.Equal(LeafNodeType, rootNode.getNodeType())
+		assert.Equal(node.LeafNodeType, rootNode.GetNodeType())
 
 		// ======================================================================
 
 		// リーフチェック
-		leaf, err = NewLeaf(rootNode)
+		l, err = leaf.NewLeaf(rootNode)
 		assert.NoError(err)
 
 		// assert.Equal(uintptr(120), unsafe.Sizeof(*leaf))
-		assert.Equal(disk.InvalidPageID, leaf.GetPrevID())
-		assert.Equal(disk.InvalidPageID, leaf.GetNextID())
-		assert.Equal(uint16(0), leaf.GetNumSlot())
-		assert.Equal(uint16(4068), leaf.GetNumFree())
+		assert.Equal(disk.InvalidPageID, l.GetPrevID())
+		assert.Equal(disk.InvalidPageID, l.GetNextID())
+		assert.Equal(uint16(0), l.GetSlotNum())
+		assert.Equal(uint16(4068), l.GetFreeNum())
 
 		// ======================================================================
 
@@ -206,78 +208,46 @@ func TestBTree_InsertAndSearch(t *testing.T) {
 
 	})
 
-	// t.Run("Insert", func(t *testing.T) {
-	// 	// テストデータ準備
-	// 	testKey := []byte("key1")
-	// 	testValue := []byte("value1")
+	t.Run("Insert and Search", func(t *testing.T) {
+		// テストデータ準備
+		// testKey := []byte("key1")
+		// testValue := []byte("value1")
 
-	// 	// ファイルマネージャ準備
-	// 	testFile := "testfile"
-	// 	fileManager, err := disk.NewFileManager(testFile)
-	// 	assert.NoError(err)
-	// 	defer os.Remove(testFile)
+		// ファイルマネージャ準備
+		testFile := "testfile"
+		fileManager, err := disk.NewFileManager(testFile)
+		assert.NoError(err)
+		defer os.Remove(testFile)
 
-	// 	// プール準備
-	// 	testPool := pool.NewPool(10)
+		// プール準備
+		testPool := pool.NewPool(10)
 
-	// 	// プールマネージャ準備
-	// 	poolManager := pool.NewPoolManager(fileManager, testPool)
-	// 	defer poolManager.Close()
+		// プールマネージャ準備
+		poolManager := pool.NewPoolManager(fileManager, testPool)
+		defer poolManager.Close()
 
-	// 	// BTree準備
-	// 	tree, err := NewBTree(poolManager)
-	// 	assert.NoError(err)
+		// BTree準備
+		tree, err := NewBTree(poolManager)
+		assert.NoError(err)
 
-	// 	// ======================================================================
+		assert.Equal(disk.PageID(0), tree.GetMetaID())
 
-	// 	// 挿入
-	// 	err = tree.Insert(testKey, testValue)
-	// 	assert.NoError(err)
+		// ======================================================================
 
-	// 	// 検索（キー）
-	// 	itr, err := tree.Search(&btree.Key{key: testKey})
-	// 	assert.NoError(err)
-	// 	// Get
-	// 	resultKey, resultValue, err := itr.Get()
-	// 	assert.NoError(err)
-	// 	assert.Equal(testKey, resultKey)
-	// 	assert.Equal(testValue, resultValue)
-	// })
+		// TODO 挿入
+		// err = tree.Insert(testKey, testValue)
+		// assert.NoError(err)
 
-	// t.Run("Insert and Search", func(t *testing.T) {
+		// // TODO 検索
+		// itr, err := tree.Search(testKey)
+		// assert.NoError(err)
 
-	// 	// ファイルマネージャ準備
-	// 	testFile := "testfile"
-	// 	fileManager, err := disk.NewFileManager(testFile)
-	// 	assert.NoError(err)
-	// 	defer os.Remove(testFile)
+		// // TODO 取得
+		// resultKey, resultValue, err := itr.Get()
+		// assert.NoError(err)
 
-	// 	// プール準備
-	// 	testPool := pool.NewPool(10)
-
-	// 	// プールマネージャ準備
-	// 	poolManager := pool.NewPoolManager(fileManager, testPool)
-	// 	defer poolManager.Close()
-
-	// 	// テストデータ準備
-	// 	testKey := []byte("key1")
-	// 	testValue := []byte("value1")
-
-	// 	// BTree準備
-	// 	tree, err := btree.NewBTree(poolManager)
-	// 	assert.NoError(err)
-
-	// 	// 挿入
-	// 	err = tree.Insert(testKey, testValue)
-	// 	assert.NoError(err)
-
-	// 	// 検索（キー）
-	// 	itr, err := tree.Search(&btree.Key{key: testKey})
-	// 	assert.NoError(err)
-	// 	// Get
-	// 	resultKey, resultValue, err := itr.Get()
-	// 	assert.NoError(err)
-	// 	assert.Equal(testKey, resultKey)
-	// 	assert.Equal(testValue, resultValue)
-	// })
+		// // Test
+		// assert.Equal(testKey, resultKey)
+		// assert.Equal(testValue, resultValue)
+	})
 }

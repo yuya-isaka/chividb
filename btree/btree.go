@@ -4,24 +4,30 @@ import (
 	"encoding/binary"
 	"fmt"
 
+	"github.com/yuya-isaka/chibidb/btree/leaf"
+	"github.com/yuya-isaka/chibidb/btree/node"
+	"github.com/yuya-isaka/chibidb/btree/util"
 	"github.com/yuya-isaka/chibidb/disk"
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
 // ======================================================================
-
 /*
 
-Node
+Leaf
+nodeType   prevID  +   nextID   +   slotNum   +   slotFreeOffset   +  slotBody
+	8byte    8 bytes    8 bytes    	2 bytes    		2 bytes 					4068 bytes
 
+Branch
+nodeType   rightID   +   slotNum   +   slotFreeOffset   +  slotBody
+	8byte     8 bytes    	2 bytes    		2 bytes 					4076 bytes
+
+Node (Page)
 	nodeType (Leaf or Branch or Meta) 						... 8 bytes
 	NodeBody (Leaf or Branch or Meta) 			 			... 4088 bytes
-
 		↓																							↓
-
 		If Meta
 			rootID										 									... 8 bytes
-
 		If Leaf
 			prevID 																			... 8 bytes
 			nextID 																			... 8 bytes
@@ -30,7 +36,8 @@ Node
 				numSlot 																		... 2 bytes
 				numFree 																		... 2 bytes
 				SlotBody																		... 4068 bytes
-
+					↓
+					Pointer 																		... 4 bytes
 		If Branch
 			rightID 																		... 8 bytes
 			BranchBody (Slot) 							 						... 4080 bytes
@@ -38,84 +45,9 @@ Node
 				numSlot 																		... 2 bytes
 				numFree 																		... 2 bytes
 				SlotBody																		... 4076 bytes
-
+					↓
+					Pointer 																		... 4 bytes
 */
-
-// ======================================================================
-
-// nt と string を区別する
-type NodeType interface {
-	xxxProtexted()
-}
-
-type nt string
-
-func (n nt) xxxProtexted() {}
-
-const (
-	MetaNodeType   nt = "META    " // メタノード、8 bytes
-	LeafNodeType   nt = "LEAF    " // 葉ノード、8 bytes
-	BranchNodeType nt = "BRANCH  " // 枝ノード、8 bytes
-)
-
-// ======================================================================
-
-// 8byteバイトスライス → disk.PageID
-func toPageID(b []byte) disk.PageID {
-	if len(b) != 8 {
-		return disk.InvalidPageID
-	}
-	return disk.PageID(binary.LittleEndian.Uint64(b)) // 符号なし64ビット整数
-}
-
-// disk.PageID → 8byteバイトスライス
-func to8Bytes(i disk.PageID) []byte {
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(i)) // バイトスライス
-	return b
-}
-
-// uint16 → 2byteバイトスライス
-func to2Bytes(i uint16) []byte {
-	b := make([]byte, 2)
-	binary.LittleEndian.PutUint16(b, i) // バイトスライス
-	return b
-}
-
-// ======================================================================
-
-type Node struct {
-	nodeUpdate *bool  // 1 byte
-	nodeType   []byte // 8 bytes, MetaNodeTyoe or LeafNodeType or BranchNodeType
-	nodeBody   []byte // 4088 bytes
-}
-
-func NewNode(page *pool.Page) (*Node, error) {
-	pageData := page.GetPageData() // 4096 bytes
-	if len(pageData) != disk.PageSize {
-		return nil, fmt.Errorf("invalid page size: got %d, want %d", len(pageData), disk.PageSize)
-	}
-
-	node := &Node{
-		nodeUpdate: page.GetUpdateFlagRef(), // 1 byte
-		nodeType:   pageData[:8],            // 8 bytes
-		nodeBody:   pageData[8:],            // 4088 bytes
-	}
-
-	return node, nil
-}
-
-func (n *Node) getNodeType() NodeType {
-	return nt(n.nodeType)
-}
-
-func (n *Node) setNodeType(nodeType NodeType) {
-	if tmp, ok := nodeType.(nt); ok {
-		*n.nodeUpdate = true
-		copy(n.nodeType, tmp)
-	}
-}
-
 // ======================================================================
 
 // BTreeのルートIDを保持する
@@ -124,104 +56,40 @@ type Meta struct {
 	rootID     []byte // 8 bytes, disk.PageID
 }
 
-func NewMeta(node *Node) (*Meta, error) {
-	if nt(node.nodeType) != MetaNodeType {
-		return nil, fmt.Errorf("invalid node type: got %s, want %s", node.nodeType, MetaNodeType)
+func NewMeta(n *node.Node) (*Meta, error) {
+	if n.GetNodeType() != node.MetaNodeType {
+		return nil, fmt.Errorf("invalid node type: got %s, want %s", n.GetNodeType(), node.MetaNodeType)
 	}
 
-	meta := &Meta{
-		metaUpdate: node.nodeUpdate,
-		rootID:     node.nodeBody[:8], // 8 bytes
-	}
-
-	return meta, nil
+	return &Meta{
+		metaUpdate: n.GetRefupdateFlag(),
+		rootID:     n.GetRefnodeBody()[:8], // 8 bytes
+	}, nil
 }
+
+// Get関係 ======================================================================
 
 func (m *Meta) getRootID() disk.PageID {
-	return toPageID(m.rootID)
+	// setの段階で、rootIDがdisk.InvalidPageIDの場合は、エラーを返すようにしているので、ここでエラーチェックは不要
+	return disk.PageID(binary.LittleEndian.Uint64(m.rootID))
 }
+
+// Set関係 ======================================================================
 
 func (m *Meta) setRootID(rootID disk.PageID) error {
 	if rootID <= disk.InvalidPageID {
 		return fmt.Errorf("invalid page id: got %d", rootID)
 	}
-
 	*m.metaUpdate = true
-	copy(m.rootID, to8Bytes(rootID))
-
+	copy(m.rootID, util.PageIDToBytes(rootID))
 	return nil
 }
 
 // ======================================================================
 
-type Slot struct {
-	slotNum  []byte // 2 bytes, uint16
-	slotFree []byte // 2 bytes, uint16
-	slotBody []byte // 4068 bytes (Leaf) or 4076 bytes (Branch)
-}
-
-func (s *Slot) reset() {
-	copy(s.slotNum, to2Bytes(0))
-	copy(s.slotFree, to2Bytes(uint16(len(s.slotBody))))
-}
-
-// ======================================================================
-
-type Leaf struct {
-	leafUpdate *bool
-	prevID     []byte // 8 bytes
-	nextID     []byte // 8 bytes
-	leafBody   Slot   // 4072 bytes
-}
-
-func NewLeaf(node *Node) (*Leaf, error) {
-	if nt(node.nodeType) != LeafNodeType {
-		return nil, fmt.Errorf("invalid node type: got %s, want %s", node.nodeType, LeafNodeType)
-	}
-
-	leaf := &Leaf{
-		leafUpdate: node.nodeUpdate,
-		prevID:     node.nodeBody[:8],   // 8 bytes
-		nextID:     node.nodeBody[8:16], // 8 bytes
-		leafBody: Slot{
-			slotNum:  node.nodeBody[16:18], // 2 bytes
-			slotFree: node.nodeBody[18:20], // 2 bytes
-			slotBody: node.nodeBody[20:],   // 4068 bytes
-		},
-	}
-
-	return leaf, nil
-}
-
-func (l *Leaf) reset() {
-	*l.leafUpdate = true
-
-	copy(l.prevID, to8Bytes(disk.InvalidPageID))
-	copy(l.nextID, to8Bytes(disk.InvalidPageID))
-
-	l.leafBody.reset()
-}
-
-func (l *Leaf) GetPrevID() disk.PageID {
-	return toPageID(l.prevID)
-}
-
-func (l *Leaf) GetNextID() disk.PageID {
-	return toPageID(l.nextID)
-}
-
-func (l *Leaf) GetNumSlot() uint16 {
-	return binary.LittleEndian.Uint16(l.leafBody.slotNum)
-}
-
-func (l *Leaf) GetNumFree() uint16 {
-	return binary.LittleEndian.Uint16(l.leafBody.slotFree)
-}
-
-// ======================================================================
-
 type BTree struct {
-	metaID disk.PageID
+	metaID      disk.PageID
+	poolManager *pool.PoolManager
 }
 
 // 生成される[metaPage]と[rootPage]は、btreeが存在する限り、常に存在する（unpinされない）
@@ -243,11 +111,11 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 		return nil, err
 	}
 	// メタノード作成と初期化
-	metaNode, err := NewNode(metaPage)
+	metaNode, err := node.NewNode(metaPage)
 	if err != nil {
 		return nil, err
 	}
-	metaNode.setNodeType(MetaNodeType)
+	metaNode.SetNodeType(node.MetaNodeType)
 	// メタデータ取得と初期化
 	metaData, err := NewMeta(metaNode)
 	if err != nil {
@@ -267,27 +135,86 @@ func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
 	}
 
 	// ルートノード作成と初期化
-	rootNode, err := NewNode(rootPage)
+	rootNode, err := node.NewNode(rootPage)
 	if err != nil {
 		return nil, err
 	}
-	rootNode.setNodeType(LeafNodeType)
+	rootNode.SetNodeType(node.LeafNodeType)
 
 	// ルートノードからリーフノード取得と初期化
-	leaf, err := NewLeaf(rootNode)
+	leaf, err := leaf.NewLeaf(rootNode)
 	if err != nil {
 		return nil, err
 	}
-	leaf.reset()
+	leaf.ResetLeaf()
 
 	// メタページとルートページをアンピン
 	rootPage.Unpin()
 
 	return &BTree{
-		metaID: metaID, // メタデータのページIDはここでセットするから、SetMetaID()は不要
+		metaID:      metaID, // メタデータのページIDはここでセットするから、SetMetaID()は不要
+		poolManager: poolManager,
 	}, nil
 }
 
+// Get関係 ======================================================================
+
 func (b *BTree) GetMetaID() disk.PageID {
 	return b.metaID
+}
+
+// Set関係 ======================================================================
+
+func (b *BTree) set(page *pool.Page, key []byte, value []byte) ([]byte, disk.PageID, error) {
+	n, err := node.NewNode(page)
+	if err != nil {
+		return nil, disk.InvalidPageID, err
+	}
+
+	switch n.GetNodeType() {
+	case node.LeafNodeType:
+		l, err := leaf.NewLeaf(n)
+		if err != nil {
+			return nil, disk.InvalidPageID, err
+		}
+		slotID, ok := l.SearchSlotID(key)
+		if ok {
+			return nil, disk.InvalidPageID, fmt.Errorf("duplicate key: %s", key)
+		}
+		// TODO
+		fmt.Println(slotID)
+	case node.BranchNodeType:
+		// TODO
+	}
+
+	return nil, disk.InvalidPageID, fmt.Errorf("invalid node type")
+}
+
+func (b *BTree) Insert(key []byte, value []byte) error {
+	metaPage, err := b.poolManager.FetchPage(b.metaID)
+	if err != nil {
+		return err
+	}
+	metaNode, err := node.NewNode(metaPage)
+	if err != nil {
+		return err
+	}
+	metaData, err := NewMeta(metaNode)
+	if err != nil {
+		return err
+	}
+
+	rootPage, err := b.poolManager.FetchPage(metaData.getRootID())
+	if err != nil {
+		return err
+	}
+
+	newKey, childPageID, err := b.set(rootPage, key, value)
+	if err != nil {
+		return err
+	}
+	// TODO
+	fmt.Println(newKey, childPageID)
+
+	return nil
 }
