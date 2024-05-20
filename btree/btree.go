@@ -1,220 +1,185 @@
 package btree
 
 import (
-	"encoding/binary"
-	"fmt"
+	"errors"
+	"log"
 
-	"github.com/yuya-isaka/chibidb/btree/leaf"
-	"github.com/yuya-isaka/chibidb/btree/node"
-	"github.com/yuya-isaka/chibidb/btree/util"
 	"github.com/yuya-isaka/chibidb/disk"
+	"github.com/yuya-isaka/chibidb/page"
 	"github.com/yuya-isaka/chibidb/pool"
+	"github.com/yuya-isaka/chibidb/util"
 )
 
-// ======================================================================
-/*
-
-Leaf
-nodeType   prevID  +   nextID   +   slotNum   +   slotFreeOffset   +  slotBody
-	8byte    8 bytes    8 bytes    	2 bytes    		2 bytes 					4068 bytes
-
-Branch
-nodeType   rightID   +   slotNum   +   slotFreeOffset   +  slotBody
-	8byte     8 bytes    	2 bytes    		2 bytes 					4076 bytes
-
-Node (Page)
-	nodeType (Leaf or Branch or Meta) 						... 8 bytes
-	NodeBody (Leaf or Branch or Meta) 			 			... 4088 bytes
-		↓																							↓
-		If Meta
-			rootID										 									... 8 bytes
-		If Leaf
-			prevID 																			... 8 bytes
-			nextID 																			... 8 bytes
-			LeafBody (Slot) 														... 4072 bytes
-				↓																						↓
-				numSlot 																		... 2 bytes
-				numFree 																		... 2 bytes
-				SlotBody																		... 4068 bytes
-					↓
-					Pointer 																		... 4 bytes
-		If Branch
-			rightID 																		... 8 bytes
-			BranchBody (Slot) 							 						... 4080 bytes
-				↓																						↓
-				numSlot 																		... 2 bytes
-				numFree 																		... 2 bytes
-				SlotBody																		... 4076 bytes
-					↓
-					Pointer 																		... 4 bytes
-*/
-// ======================================================================
-
-// BTreeのルートIDを保持する
-type Meta struct {
-	metaUpdate *bool
-	rootID     []byte // 8 bytes, disk.PageID
-}
-
-func NewMeta(n *node.Node) (*Meta, error) {
-	if n.GetNodeType() != node.MetaNodeType {
-		return nil, fmt.Errorf("invalid node type: got %s, want %s", n.GetNodeType(), node.MetaNodeType)
-	}
-
-	return &Meta{
-		metaUpdate: n.GetRefupdateFlag(),
-		rootID:     n.GetRefnodeBody()[:8], // 8 bytes
-	}, nil
-}
-
-// Get関係 ======================================================================
-
-func (m *Meta) getRootID() disk.PageID {
-	// setの段階で、rootIDがdisk.InvalidPageIDの場合は、エラーを返すようにしているので、ここでエラーチェックは不要
-	return disk.PageID(binary.LittleEndian.Uint64(m.rootID))
-}
-
-// Set関係 ======================================================================
-
-func (m *Meta) setRootID(rootID disk.PageID) error {
-	if rootID <= disk.InvalidPageID {
-		return fmt.Errorf("invalid page id: got %d", rootID)
-	}
-	*m.metaUpdate = true
-	copy(m.rootID, util.PageIDToBytes(rootID))
-	return nil
-}
-
-// ======================================================================
-
 type BTree struct {
-	metaID      disk.PageID
+	rootID      disk.PageID
 	poolManager *pool.PoolManager
 }
 
-// 生成される[metaPage]と[rootPage]は、btreeが存在する限り、常に存在する（unpinされない）
 func NewBTree(poolManager *pool.PoolManager) (*BTree, error) {
-	// メタページ作成
-	metaID, err := poolManager.CreatePage()
-	if err != nil {
-		return nil, err
-	}
-	// ルートページ作成
+	// rootID == 0
 	rootID, err := poolManager.CreatePage()
 	if err != nil {
 		return nil, err
 	}
 
-	// メタページ取得
-	metaPage, err := poolManager.FetchPage(metaID)
-	if err != nil {
-		return nil, err
-	}
-	// メタノード作成と初期化
-	metaNode, err := node.NewNode(metaPage)
-	if err != nil {
-		return nil, err
-	}
-	metaNode.SetNodeType(node.MetaNodeType)
-	// メタデータ取得と初期化
-	metaData, err := NewMeta(metaNode)
-	if err != nil {
-		return nil, err
-	}
-	if err = metaData.setRootID(rootID); err != nil {
-		return nil, err
-	}
-
-	// メタページをアンピン
-	metaPage.Unpin()
-
-	// ルートページ取得
+	// rootPage
 	rootPage, err := poolManager.FetchPage(rootID)
 	if err != nil {
 		return nil, err
 	}
-
-	// ルートノード作成と初期化
-	rootNode, err := node.NewNode(rootPage)
-	if err != nil {
-		return nil, err
-	}
-	rootNode.SetNodeType(node.LeafNodeType)
-
-	// ルートノードからリーフノード取得と初期化
-	leaf, err := leaf.NewLeaf(rootNode)
-	if err != nil {
-		return nil, err
-	}
-	leaf.ResetLeaf()
-
-	// メタページとルートページをアンピン
-	rootPage.Unpin()
+	// リーフノードの設定だけでいいはず
+	// rootPageは一番最初はリーフノード
+	rootPage.SetNodeType(page.LeafNodeType)
 
 	return &BTree{
-		metaID:      metaID, // メタデータのページIDはここでセットするから、SetMetaID()は不要
+		rootID:      rootID,
 		poolManager: poolManager,
 	}, nil
 }
 
-// Get関係 ======================================================================
-
-func (b *BTree) GetMetaID() disk.PageID {
-	return b.metaID
-}
-
-// Set関係 ======================================================================
-
-func (b *BTree) set(page *pool.Page, key []byte, value []byte) ([]byte, disk.PageID, error) {
-	n, err := node.NewNode(page)
+func (b *BTree) Search(key []byte) ([]byte, error) {
+	current, err := b.poolManager.FetchPage(b.rootID)
 	if err != nil {
-		return nil, disk.InvalidPageID, err
+		return nil, err
 	}
 
-	switch n.GetNodeType() {
-	case node.LeafNodeType:
-		l, err := leaf.NewLeaf(n)
+	for current != nil {
+		var i uint16 = 0
+		for i < current.GetPointersNum() && util.CompareByteSlice(key, current.GetKey(i)) == util.Greater {
+			i++
+		}
+
+		if i < current.GetPointersNum() && util.CompareByteSlice(key, current.GetKey(i)) == util.Equal {
+			if current.GetNodeType() == page.LeafNodeType {
+				return current.GetValue(i), nil
+			}
+		}
+
+		if current.GetNodeType() == page.LeafNodeType {
+			return nil, errors.New("key not found")
+		}
+
+		newPageId := util.BytesToPageID(current.GetValue(i))
+		current, err = b.poolManager.FetchPage(newPageId)
 		if err != nil {
-			return nil, disk.InvalidPageID, err
+			return nil, err
 		}
-		slotID, ok := l.SearchSlotID(key)
-		if ok {
-			return nil, disk.InvalidPageID, fmt.Errorf("duplicate key: %s", key)
-		}
-		// TODO
-		fmt.Println(slotID)
-	case node.BranchNodeType:
-		// TODO
 	}
 
-	return nil, disk.InvalidPageID, fmt.Errorf("invalid node type")
+	return nil, errors.New("key not found")
 }
 
 func (b *BTree) Insert(key []byte, value []byte) error {
-	metaPage, err := b.poolManager.FetchPage(b.metaID)
-	if err != nil {
-		return err
-	}
-	metaNode, err := node.NewNode(metaPage)
-	if err != nil {
-		return err
-	}
-	metaData, err := NewMeta(metaNode)
+	rootPage, err := b.poolManager.FetchPage(b.rootID)
 	if err != nil {
 		return err
 	}
 
-	rootPage, err := b.poolManager.FetchPage(metaData.getRootID())
-	if err != nil {
-		return err
+	freeNum := rootPage.GetFreeNum()
+
+	// freeNumがpage.MaxPairSizeの半分よりも小さくなったら分割
+	if freeNum*2 < page.MaxPairSize {
+		// 新しいrootPageを作成
+		newRootID, err := b.poolManager.CreatePage()
+		if err != nil {
+			return err
+		}
+		newRootPage, err := b.poolManager.FetchPage(newRootID)
+		if err != nil {
+			return err
+		}
+		newRootPage.SetNodeType(page.BranchNodeType)
+		// Keyは現時点では不明
+		// ValueはrootID
+		newRootPage.InsertPair(0, page.NewPair(nil, util.PageIDTo8Bytes(b.rootID)))
+		b.splitChild(newRootPage, 0)
+		b.rootID = newRootID
 	}
 
-	newKey, childPageID, err := b.set(rootPage, key, value)
-	if err != nil {
-		return err
-	}
-	// TODO
-	fmt.Println(newKey, childPageID)
+	b.insertNonFull(rootPage, key, value)
 
 	return nil
+}
+
+// ここら辺バグってる
+func (b *BTree) insertNonFull(nodePage *page.Page, key []byte, value []byte) {
+	var idx uint16
+	if nodePage.GetPointersNum() == 0 {
+		idx = 0
+	} else {
+		idx = nodePage.GetPointersNum() - 1
+	}
+	// i >=0 && nodePage.GetKey(i) > key
+
+	switch nodePage.GetNodeType() {
+	case page.LeafNodeType:
+		for idx != 0 && util.CompareByteSlice(nodePage.GetKey(idx), key) == util.Greater {
+			idx--
+		}
+		// キーと値を挿入
+		nodePage.InsertPair(idx, page.NewPair(key, value))
+		return
+	case page.BranchNodeType:
+		for idx != 0 && util.CompareByteSlice(nodePage.GetKey(idx), key) == util.Greater {
+			idx--
+		}
+		idx++
+
+		if nodePage.GetFreeNum()*2 < page.MaxPairSize {
+			b.splitChild(nodePage, idx)
+			if util.CompareByteSlice(key, nodePage.GetKey(idx)) == util.Greater {
+				idx++
+			}
+		}
+		targetPageID := nodePage.GetValue(idx)
+		targetPage, err := b.poolManager.FetchPage(util.BytesToPageID(targetPageID))
+		if err != nil {
+			log.Panicf("failed to fetch page: %v", err)
+			return
+		}
+		b.insertNonFull(targetPage, key, value)
+	}
+}
+
+func (b *BTree) splitChild(parentPage *page.Page, idx uint16) {
+	oldPageID := util.BytesToPageID(parentPage.GetValue(idx))
+	oldPage, err := b.poolManager.FetchPage(oldPageID)
+	if err != nil {
+		log.Panicf("failed to fetch page: %v", err)
+		return
+	}
+
+	// 新しいページを作成
+	newPageID, err := b.poolManager.CreatePage()
+	if err != nil {
+		log.Panicf("failed to create page: %v", err)
+		return
+	}
+	newPage, err := b.poolManager.FetchPage(newPageID)
+	if err != nil {
+		log.Panicf("failed to fetch page: %v", err)
+		return
+	}
+
+	// childPageの中央のペア以降をnewPageに移動
+	medianIdx := oldPage.GetPointersNum() / 2
+	for i := medianIdx + 1; i < oldPage.GetPointersNum(); i++ {
+		newPage.InsertPair(uint16(i-medianIdx-1), page.NewPair(oldPage.GetKey(i), oldPage.GetValue(i)))
+	}
+	medianKey := oldPage.GetKey(medianIdx)
+
+	switch oldPage.GetNodeType() {
+	case page.LeafNodeType:
+		newPage.SetNodeType(page.LeafNodeType)
+		oldPage.DeletePair(medianIdx + 1)
+	case page.BranchNodeType:
+		newPage.SetNodeType(page.BranchNodeType)
+		for i := medianIdx + 1; i < oldPage.GetPointersNum(); i++ {
+			newPage.InsertPair(uint16(i-medianIdx-1), oldPage.GetPair(i))
+		}
+		oldPage.DeletePair(medianIdx + 1)
+	}
+
+	// parentPageにnewPageの最初のキーを挿入
+	parentPage.InsertPair(idx, page.NewPair(medianKey, util.PageIDTo8Bytes(newPageID)))
 }

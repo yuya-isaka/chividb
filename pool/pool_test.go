@@ -8,40 +8,30 @@ import (
 	"github.com/yuya-isaka/chibidb/disk"
 )
 
-// func TestMain(m *testing.M) {
-// 	goleak.VerifyTestMain(m)
-// }
-
-// ページ作って、bytesで初期化したデータを用意する。Unpinして返す。
-func createPageTest(poolManager *PoolManager, bytes []byte) (disk.PageID, error) {
-	// ページ作成
-	pageID, err := poolManager.CreatePage()
+func createSetPage(pm *PoolManager, start uint, data []byte) (disk.PageID, error) {
+	pageID, err := pm.CreatePage()
 	if err != nil {
-		return disk.InvalidPageID, err
+		return disk.PageID(-1), err
 	}
 
-	// ページデータ書き込み
-	fetchPage, err := poolManager.FetchPage(pageID)
+	page, err := pm.FetchPage(pageID)
 	if err != nil {
-		return disk.InvalidPageID, err
+		return disk.PageID(-1), err
 	}
 
-	fetchPage.SetPageData(bytes)
-	fetchPage.Unpin()
+	page.SetData(uint16(start), uint16(len(data)), data)
 
 	return pageID, nil
 }
-
-// ======================================================================
 
 func TestPool(t *testing.T) {
 	// 準備
 	assert := assert.New(t)
 
 	// テストデータ準備
-	helloBytes := make([]byte, disk.PageSize)
+	helloBytes := make([]byte, 4096)
 	copy(helloBytes, "Hello")
-	worldBytes := make([]byte, disk.PageSize)
+	worldBytes := make([]byte, 4096)
 	copy(worldBytes, "World")
 
 	// ======================================================================
@@ -49,19 +39,15 @@ func TestPool(t *testing.T) {
 	t.Run("Simple Pool 3", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		poolManager, err := NewPoolManager(testFile, 3)
 		assert.NoError(err)
-		defer os.Remove(testFile)
-
-		// プール準備
-		poolTest := NewPool(3)
-		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
+		defer os.Remove(testFile)
 
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPageTest(poolManager, helloBytes)
+		helloID, err := createSetPage(poolManager, 0, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -70,25 +56,21 @@ func TestPool(t *testing.T) {
 
 		// テスト
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 	})
 
 	t.Run("Complex Pool 3", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		poolManager, err := NewPoolManager(testFile, 3)
 		assert.NoError(err)
-		defer os.Remove(testFile)
-
-		// プール準備
-		poolTest := NewPool(3)
-		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
+		defer os.Remove(testFile)
 
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPageTest(poolManager, helloBytes)
+		helloID, err := createSetPage(poolManager, 0, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -97,12 +79,12 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPageTest(poolManager, worldBytes)
+		worldID, err := createSetPage(poolManager, 0, worldBytes)
 		assert.NoError(err)
 
 		// ======================================================================
@@ -113,7 +95,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
@@ -123,25 +105,21 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetPageData())
+		assert.Equal(worldBytes, fetchPage.GetAllData())
 	})
 
 	t.Run("Pool 1", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		poolManager, err := NewPoolManager(testFile, 1)
 		assert.NoError(err)
-		defer os.Remove(testFile)
-
-		// プール準備
-		poolTest := NewPool(1)
-		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
+		defer os.Remove(testFile)
 
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPageTest(poolManager, helloBytes)
+		helloID, err := createSetPage(poolManager, 0, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -150,25 +128,12 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
-
-		// ======================================================================
-
-		// Error test
-		// プールのサイズは１で、fetchPageがまだ持っているので、エラーになる
-		_, err = poolManager.CreatePage()
-		assert.Error(err)
-		assert.Equal("all pages are pinned", err.Error())
-
-		// 参照カウンタを減らすことで、新しいページが作れるようになる
-		// helloPageとfetchPageは同じページを参照しており、そのページのカウントを２回下げることで-1になる
-		fetchPage.Unpin()
-		assert.Equal(Pin(-1), fetchPage.GetPinCount())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPageTest(poolManager, worldBytes)
+		worldID, err := createSetPage(poolManager, 0, worldBytes)
 		assert.NoError(err)
 
 		// fetch (world)
@@ -177,17 +142,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetPageData())
-
-		// ======================================================================
-
-		// Error test
-		_, err = poolManager.CreatePage()
-		assert.Error(err)
-		assert.Equal("all pages are pinned", err.Error())
-
-		fetchPage.Unpin()
-		assert.Equal(NoReferencePin, fetchPage.GetPinCount())
+		assert.Equal(worldBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
@@ -199,25 +154,21 @@ func TestPool(t *testing.T) {
 		assert.NoError(err)
 
 		// テスト (hello)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 	})
 
 	t.Run("Pool 2", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		poolManager, err := NewPoolManager(testFile, 2)
 		assert.NoError(err)
-		defer os.Remove(testFile)
-
-		// プール準備
-		poolTest := NewPool(2)
-		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
+		defer os.Remove(testFile)
 
 		// ======================================================================
 
 		// create (hello)
-		helloID, err := createPageTest(poolManager, helloBytes)
+		helloID, err := createSetPage(poolManager, 0, helloBytes)
 		assert.NoError(err)
 
 		// fetch (hello)
@@ -226,12 +177,12 @@ func TestPool(t *testing.T) {
 
 		// テスト (hello)
 		assert.Equal(disk.PageID(0), helloID)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
 		// create (world)
-		worldID, err := createPageTest(poolManager, worldBytes)
+		worldID, err := createSetPage(poolManager, 0, worldBytes)
 		assert.NoError(err)
 
 		// fetch (world)
@@ -240,7 +191,7 @@ func TestPool(t *testing.T) {
 
 		// テスト (world)
 		assert.Equal(disk.PageID(1), worldID)
-		assert.Equal(worldBytes, fetchPage.GetPageData())
+		assert.Equal(worldBytes, fetchPage.GetAllData())
 
 		// ======================================================================
 
@@ -249,20 +200,16 @@ func TestPool(t *testing.T) {
 		assert.NoError(err)
 
 		// テスト (hello)
-		assert.Equal(helloBytes, fetchPage.GetPageData())
+		assert.Equal(helloBytes, fetchPage.GetAllData())
 	})
 
 	t.Run("Fetch Nonexistent Page", func(t *testing.T) {
 		// テストファイル準備
 		testFile := "testfile"
-		fileManager, err := disk.NewFileManager(testFile)
+		poolManager, err := NewPoolManager(testFile, 2)
 		assert.NoError(err)
-		defer os.Remove(testFile)
-
-		// プール準備
-		poolTest := NewPool(2)
-		poolManager := NewPoolManager(fileManager, poolTest)
 		defer poolManager.Close()
+		defer os.Remove(testFile)
 
 		// ======================================================================
 
@@ -271,16 +218,73 @@ func TestPool(t *testing.T) {
 		_, err = poolManager.FetchPage(nonexistentPageID)
 
 		assert.Error(err)
-		assert.Equal("invalid page id: got 999", err.Error())
+		assert.Equal("指定されたページIDが無効です。ページID: 999", err.Error())
 
 		// ======================================================================
 
 		// 未定義ページIDに対してFetchを行います。
-		nonexistentPageID = disk.InvalidPageID
+		nonexistentPageID = disk.PageID(-1)
 		_, err = poolManager.FetchPage(nonexistentPageID)
 
 		assert.Error(err)
-		assert.Equal("invalid page id: got -1", err.Error())
+		assert.Equal("指定されたページIDが無効です。ページID: -1", err.Error())
 	})
 
+}
+
+// ==========================================================================
+
+func TestNewPoolManager(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := NewPoolManager(dir+"/dbfile", 10)
+	if err != nil {
+		t.Errorf("Failed to create PoolManager: %v", err)
+	}
+}
+
+func TestCreateAndFetchPage(t *testing.T) {
+	dir := t.TempDir()
+
+	pm, err := NewPoolManager(dir+"/dbfile", 10)
+	if err != nil {
+		t.Fatalf("Failed to create PoolManager: %v", err)
+	}
+	defer pm.Close()
+
+	pageID, err := pm.CreatePage()
+	if err != nil {
+		t.Errorf("Failed to create page: %v", err)
+	}
+
+	page, err := pm.FetchPage(pageID)
+	if err != nil {
+		t.Errorf("Failed to fetch page: %v", err)
+	}
+
+	if page.PageID != pageID {
+		t.Errorf("Failed pageID: %v", err)
+	}
+}
+
+func TestSyncAndClose(t *testing.T) {
+	dir := t.TempDir()
+
+	pm, err := NewPoolManager(dir+"/dbfile", 10)
+	if err != nil {
+		t.Fatalf("Failed to create PoolManager: %v", err)
+	}
+
+	// Perform some operations
+	pageID, _ := pm.CreatePage()
+	page, _ := pm.FetchPage(pageID)
+	page.SetData(0, uint16(0+len("some data")), []byte("some data"))
+
+	// Sync and close
+	if err := pm.Sync(); err != nil {
+		t.Errorf("Failed to sync: %v", err)
+	}
+	if err := pm.Close(); err != nil {
+		t.Errorf("Failed to close PoolManager: %v", err)
+	}
 }

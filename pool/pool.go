@@ -1,259 +1,154 @@
 package pool
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/yuya-isaka/chibidb/disk"
+	"github.com/yuya-isaka/chibidb/page"
 )
-
-const (
-	InvalidPoolIndex = PoolIndex(-1) // 無効なプールインデックス
-	NoReferencePin   = Pin(-1)       // ピンがない状態
-)
-
-// プール内のページ位置を示す型
-type PoolIndex int64
-
-// ページの参照カウントを示す型
-type Pin int64
-
-// ======================================================================
-
-// ストレージの1ページを表す構造体
-type Page struct {
-	id     disk.PageID // ページの一意なID
-	data   []byte      // ページのデータ内容
-	pin    Pin         // ページの参照数
-	update bool        // ページの更新フラグ
-}
-
-// ページ情報のリセット
-func (p *Page) reset() {
-	p.id = disk.InvalidPageID            // ページIDを無効化
-	p.data = make([]byte, disk.PageSize) // ページデータをデフォルトサイズに初期化
-	p.pin = NoReferencePin               // 参照カウントを無効化
-	p.update = false                     // 更新フラグをリセット
-}
-
-// ページIDの取得
-func (p *Page) GetPageID() disk.PageID {
-	return p.id
-}
-
-// ページIDの設定
-// 渡されるページIDは、無効なページIDであってはならない
-func (p *Page) SetPageID(newID disk.PageID) {
-	p.update = true
-	p.id = newID
-}
-
-// ページデータの取得
-func (p *Page) GetPageData() []byte {
-	return p.data
-}
-
-// ページデータの設定
-func (p *Page) SetPageData(data []byte) {
-	p.update = true
-	p.data = data
-}
-
-// ピンカウントの取得
-func (p *Page) GetPinCount() Pin {
-	return p.pin
-}
-
-// ピンカウントのインクリメント
-func (p *Page) addPin() {
-	p.pin++
-}
-
-// ピンカウントのデクリメント
-func (p *Page) Unpin() {
-	p.pin--
-}
-
-// 更新フラグの取得
-func (p *Page) GetUpdateFlag() bool {
-	return p.update
-}
-
-func (p *Page) GetUpdateFlagRef() *bool {
-	return &p.update
-}
-
-// 更新フラグの設定
-func (p *Page) setUpdateFlag(update bool) {
-	p.update = update
-}
-
-// ======================================================================
-
-// 複数のPageをバッファするメモリプール
-type Pool struct {
-	pages         []Page    // プール内の全ページ
-	nextKickIndex PoolIndex // 次にプールから削除するページのインデックス
-}
-
-// 指定されたサイズの新しいページプールの作成
-// エラーは起きないはず
-func NewPool(size int) *Pool {
-
-	// 一定数のページを持つプールを作成し、各ページを初期化
-	// （辞書アクセスでバグらせないように）
-	pages := make([]Page, size)
-	for i := 0; i < size; i++ {
-		pages[i].reset()
-	}
-
-	return &Pool{
-		pages:         pages,
-		nextKickIndex: PoolIndex(0),
-	}
-}
-
-// 指定インデックスのページの取得
-func (po *Pool) getPage(index PoolIndex) *Page {
-	return &po.pages[index]
-}
-
-// クロックスイープアルゴリズム: プールからページを削除するインデックスの探索
-func (po *Pool) clockSweep() (PoolIndex, error) {
-	pageNum := len(po.pages) // プール内のページ数
-	checkedPageNum := 0      // チェックしたページ数
-
-	// プールのページを探し、ピンされていないページを見つけるか、全ページをチェックするまでループ
-	for {
-		nextKickIndex := po.nextKickIndex
-		page := po.getPage(nextKickIndex)
-
-		if page.GetPinCount() == NoReferencePin {
-			return nextKickIndex, nil // ピンされていないページを見つけたら、そのインデックスを返す
-		} else {
-			checkedPageNum++
-			if checkedPageNum >= pageNum {
-				return InvalidPoolIndex, errors.New("all pages are pinned") // 全てのページがピンされている場合はエラーを返す
-			}
-		}
-
-		// 次のチェックするインデックスの準備
-		po.nextKickIndex = (po.nextKickIndex + 1) % PoolIndex(pageNum)
-	}
-}
-
-// ======================================================================
 
 // ページプールとページテーブルを管理
 type PoolManager struct {
-	fileManager *disk.FileManager         // データのファイルへの保存・読み込みを行うマネージャ
-	pool        *Pool                     // ページプール
-	pageTable   map[disk.PageID]PoolIndex // ページIDとプール内のインデックスをマッピングするテーブル
+	fileManager *disk.FileManager    // データのファイルへの保存・読み込みを行うマネージャ
+	pool        []*page.Page         // プール内の全ページ
+	sweepIndex  uint                 // 次にプールから削除するページのインデックス
+	pageTable   map[disk.PageID]uint // ページIDとプール内のインデックスをマッピングするテーブル
 }
 
 // 新しいPoolManagerを作成
 // エラーは起きないはず
-func NewPoolManager(fileManager *disk.FileManager, pool *Pool) *PoolManager {
+func NewPoolManager(path string, poolNum uint) (*PoolManager, error) {
+
+	fm, err := disk.NewFileManager(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// 一定数のページを持つプールを作成し、各ページを初期化
+	// （辞書アクセスでバグらせないように）
+	pool := make([]*page.Page, 0, poolNum)
+	for range poolNum {
+		pool = append(pool, page.NewPage())
+	}
+
 	return &PoolManager{
-		fileManager: fileManager,
+		fileManager: fm,
 		pool:        pool,
-		pageTable:   make(map[disk.PageID]PoolIndex),
-	}
+		sweepIndex:  0,
+		pageTable:   make(map[disk.PageID]uint),
+	}, nil
 }
 
-// プールからページを削除し、その場所を新しいページで利用可能にする
-func (pm *PoolManager) kickPage() (*Page, PoolIndex, error) {
+// プールで使用可能なページとそのインデクスを返却
+// クロックスイープアルゴリズム: プールからページを削除するインデックスの探索
+// TODO:改良の余地あり
+func (pm *PoolManager) sweepPage() (*page.Page, uint, error) {
 
-	// プールから使用可能なページインデックスを探索
-	poolIndex, err := pm.pool.clockSweep()
-	if err != nil {
-		return nil, InvalidPoolIndex, err
-	}
+	// ------------------------------------------------------------------
+	for {
+		sweepi := pm.sweepIndex
+		page := pm.pool[sweepi]
 
-	// ページがページテーブルに登録されていれば、登録を削除
-	page := pm.pool.getPage(poolIndex)
-	delete(pm.pageTable, page.GetPageID())
+		if page.Counter == 0 {
+			// ページがページテーブルに登録されていれば、登録を削除
+			delete(pm.pageTable, page.PageID)
 
-	// ページが更新されていれば、その内容をファイルに書き込み
-	if page.GetUpdateFlag() {
-		if err := pm.fileManager.WritePageData(page.GetPageID(), page.GetPageData()); err != nil {
-			page.setUpdateFlag(false)
-			return nil, InvalidPoolIndex, err
+			// ページが更新されていれば、その内容をファイルに書き込み
+			if page.Flag {
+				if err := pm.fileManager.WriteData(page.PageID, page.GetAllData()); err != nil {
+					page.Flag = false
+					return nil, 0, err
+				}
+			}
+
+			pm.sweepIndex = (sweepi + 1) % uint(len(pm.pool))
+
+			// このページとインデックス使っていいよー
+			return page, sweepi, nil
 		}
-	}
 
-	// 使用可能なページとそのインデックスを返却
-	return page, poolIndex, nil
+		page.Counter--
+		pm.sweepIndex = (sweepi + 1) % uint(len(pm.pool))
+	}
 }
 
-// 指定したページIDのページを取得
-func (pm *PoolManager) FetchPage(pageID disk.PageID) (*Page, error) {
-
-	// 無効なページIDはエラー
-	if pageID <= disk.InvalidPageID || pageID >= pm.fileManager.GetNextPageID() {
-		return nil, fmt.Errorf("invalid page id: got %d", pageID)
-	}
-
-	// ページテーブルにページIDのページが存在するか確認
-	if poolIndex, ok := pm.pageTable[pageID]; ok {
-		page := pm.pool.getPage(poolIndex)
-		page.addPin()    // ページ利用のためピンカウントを増加
-		return page, nil // 存在すれば、そのページを返却
-	}
-
-	// ページテーブルに存在しなければ、プールからページを取得しファイルから内容を読み込み
-	page, poolIndex, err := pm.kickPage()
-	if err != nil {
-		return nil, err
-	}
-	page.SetPageID(pageID)
-	page.setUpdateFlag(false)
-	// ファイルからページデータを読み込み
-	if err = pm.fileManager.ReadPageData(pageID, page.GetPageData()); err != nil {
-		return nil, err
-	}
-	page.addPin() // ページ利用のためピンカウントを増加
-	pm.pageTable[pageID] = poolIndex
-
-	return page, nil
-}
-
-// 新しいページを作成
+// 新しいページを作成し、そのページIDを返却
 func (pm *PoolManager) CreatePage() (disk.PageID, error) {
 
 	// プールから使用可能なページを取得
-	page, poolIndex, err := pm.kickPage()
+	page, poolIndex, err := pm.sweepPage()
 	if err != nil {
-		return disk.InvalidPageID, err
+		return disk.PageID(-1), err
 	}
 
-	// ファイルから新しいページIDを取得
-	newPageID, err := pm.fileManager.AllocNewPage()
+	page.ResetPage()
+	page.ResetPageData() // Flagをtrueにする
+
+	// 新しいページの設定
+	newPageID, err := pm.fileManager.AllocPage()
 	if err != nil {
-		return disk.InvalidPageID, err
+		return disk.PageID(-1), err
 	}
+	page.PageID = newPageID
 
-	// 新しいページの設定を行い、ページテーブルに登録
-	page.reset()
-	page.SetPageID(newPageID)
-
+	// ページテーブルに登録
 	pm.pageTable[newPageID] = poolIndex
 
 	return newPageID, nil
 }
 
+// 指定したページIDのページを取得し返却
+func (pm *PoolManager) FetchPage(pageID disk.PageID) (*page.Page, error) {
+
+	// 無効なページIDはエラー
+	if pageID <= disk.PageID(-1) || pageID >= pm.fileManager.NextID {
+		return nil, fmt.Errorf("指定されたページIDが無効です。ページID: %d", pageID)
+	}
+
+	// ページテーブルにページIDのページが存在するか確認
+	if poolIndex, ok := pm.pageTable[pageID]; ok {
+		page := pm.pool[poolIndex]
+		page.Counter++   // ページ利用のためカウントを増加
+		return page, nil // 存在すれば、そのページを返却
+	}
+
+	// ページテーブルに存在しなければ、プールからページを取得しファイルから内容を読み込み
+	newPage, poolIndex, err := pm.sweepPage()
+	if err != nil {
+		return nil, err
+	}
+
+	// データ初期化------------------------------------------------------
+	// ファイルからページデータを読み込み
+	if err = pm.fileManager.ReadData(pageID, newPage.GetAllData()); err != nil {
+		return nil, err
+	}
+	newPage.PageID = pageID
+	newPage.Flag = false // データは更新されていないのでfalse
+	newPage.Counter++    // ページ利用のためカウントを増加
+	//-----------------------------------------------------------------
+
+	// ページテーブルに登録
+	pm.pageTable[pageID] = poolIndex
+
+	return newPage, nil
+}
+
 // ページテーブル内の変更されたすべてのページをファイルに書き込み
 func (pm *PoolManager) Sync() error {
 	for pageId, poolIndex := range pm.pageTable {
-		page := pm.pool.getPage(poolIndex)
-		if err := pm.fileManager.WritePageData(pageId, page.GetPageData()); err != nil {
+		page := pm.pool[poolIndex]
+		if !page.Flag {
+			continue
+		}
+		if err := pm.fileManager.WriteData(pageId, page.GetAllData()); err != nil {
 			return err
 		}
-		page.setUpdateFlag(false)
+		page.Flag = false
 	}
 
 	// ファイル内容をディスクと同期
-	return pm.fileManager.Sync()
+	return pm.fileManager.Heap.Sync()
 }
 
 // プールマネージャを閉じ、関連リソースを解放
@@ -264,5 +159,5 @@ func (pm *PoolManager) Close() error {
 	}
 
 	// ファイルマネージャを閉じる
-	return pm.fileManager.Close()
+	return pm.fileManager.Heap.Close()
 }

@@ -2,6 +2,8 @@ package bsearch
 
 import (
 	"testing"
+
+	"github.com/yuya-isaka/chibidb/util"
 )
 
 func TestBinarySearch(t *testing.T) {
@@ -25,13 +27,13 @@ func TestBinarySearch(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		index, ok := BinarySearch(uint16(len(a)), func(i uint16) Ordering {
+		index, ok := BinarySearch(uint16(len(a)), func(i uint16) util.Ordering {
 			if a[i] == test.target {
-				return Equal
+				return util.Equal
 			} else if a[i] < test.target {
-				return Less
+				return util.Less
 			} else {
-				return Greater
+				return util.Greater
 			}
 		})
 
