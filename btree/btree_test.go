@@ -1,17 +1,20 @@
 package btree
 
 import (
+	"os"
 	"testing"
 
 	"github.com/yuya-isaka/chibidb/pool"
 )
 
 func TestBTreeInsertAndSearch(t *testing.T) {
+	testFile := "testdata"
 	poolManager, err := pool.NewPoolManager("testdata", 100)
 	if err != nil {
 		t.Fatalf("Failed to create pool manager: %v", err)
 	}
 	defer poolManager.Close()
+	defer os.Remove(testFile)
 
 	// BTreeの新規作成
 	btree, err := NewBTree(poolManager)

@@ -74,11 +74,13 @@ func (b *BTree) Insert(key []byte, value []byte) error {
 	if err != nil {
 		return err
 	}
-
-	freeNum := rootPage.GetFreeNum()
+	if rootPage.GetPointersNum() == 0 {
+		rootPage.InsertPair(0, page.NewPair(key, value))
+		return nil
+	}
 
 	// freeNumがpage.MaxPairSizeの半分よりも小さくなったら分割
-	if freeNum*2 < page.MaxPairSize {
+	if rootPage.GetFreeNum()*2 < page.MaxPairSize {
 		// 新しいrootPageを作成
 		newRootID, err := b.poolManager.CreatePage()
 		if err != nil {
@@ -103,28 +105,18 @@ func (b *BTree) Insert(key []byte, value []byte) error {
 
 // ここら辺バグってる
 func (b *BTree) insertNonFull(nodePage *page.Page, key []byte, value []byte) {
-	var idx uint16
-	if nodePage.GetPointersNum() == 0 {
-		idx = 0
-	} else {
-		idx = nodePage.GetPointersNum() - 1
+	idx := nodePage.GetPointersNum() - 1
+	for idx != 0 && util.CompareByteSlice(nodePage.GetKey(idx), key) == util.Greater {
+		idx--
 	}
-	// i >=0 && nodePage.GetKey(i) > key
+	idx++
 
 	switch nodePage.GetNodeType() {
 	case page.LeafNodeType:
-		for idx != 0 && util.CompareByteSlice(nodePage.GetKey(idx), key) == util.Greater {
-			idx--
-		}
 		// キーと値を挿入
 		nodePage.InsertPair(idx, page.NewPair(key, value))
 		return
 	case page.BranchNodeType:
-		for idx != 0 && util.CompareByteSlice(nodePage.GetKey(idx), key) == util.Greater {
-			idx--
-		}
-		idx++
-
 		if nodePage.GetFreeNum()*2 < page.MaxPairSize {
 			b.splitChild(nodePage, idx)
 			if util.CompareByteSlice(key, nodePage.GetKey(idx)) == util.Greater {
